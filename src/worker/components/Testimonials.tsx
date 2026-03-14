@@ -1,5 +1,3 @@
-import React from "react";
-
 export const MOCK_REVIEWS = [
   { name: "Priya Sharma", rating: 5, text: "Amazing service! The cleaner was professional and thorough. Highly recommend!", avatar: "P", bg: "#F97316" },
   { name: "Rahul Verma", rating: 5, text: "Booked a plumber for an emergency. Arrived on time and fixed everything quickly.", avatar: "R", bg: "#8B5CF6" },

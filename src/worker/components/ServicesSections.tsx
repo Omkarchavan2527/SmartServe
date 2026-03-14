@@ -1,5 +1,3 @@
-import React from "react";
-
 // Assuming these are defined elsewhere, I'll import them or define here
 const TOP_SERVICES = [
   { icon: "🧹", label: "Cleaning", color: "#EFF6FF" },
