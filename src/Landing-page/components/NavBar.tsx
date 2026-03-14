@@ -47,19 +47,21 @@ const Navbar: React.FC<NavbarProps> = ({ onLoginClick, onLogoClick }) => {
                     <a href="#hire" className= { `${isMobileMenuOpen ? 'text-black font-semibold text-base' :'text-sm md:text-[0.95rem] font-medium  text-white relative hover:font-bold'}`}>Hire</a>
                 </div>
 
-                <button onClick={onLoginClick} className="hidden md:inline-block px-6 md:px-7 py-2 md:py-3 bg-[#5656d4] hover:bg-[#3232c2] text-white rounded-lg font-body text-sm md:text-base font-semibold transition-all duration-300 hover:bg-primary-dark hover:-translate-y-0.5 hover:shadow-lg">
-                    Login
-                </button>
+                <div className="flex items-center gap-2">
+                    <button onClick={onLoginClick} className="px-4 py-2 bg-[#5656d4] hover:bg-[#3232c2] text-white rounded-lg font-body text-sm font-semibold transition-all duration-300 hover:bg-primary-dark hover:-translate-y-0.5 hover:shadow-lg md:px-6 md:py-3 md:text-base">
+                        Login
+                    </button>
 
-                <button
-                    className="md:hidden flex flex-col gap-1 p-2"
-                    onClick={toggleMobileMenu}
-                    aria-label="Toggle mobile menu"
-                >
-                    <span className={`w-5 h-0.5 md:w-6 md:h-0.75 bg-gray-900 rounded-sm transition-all duration-300 ${isMobileMenuOpen ? 'rotate-45 translate-y-1.5 md:translate-y-2' : ''}`}></span>
-                    <span className={`w-5 h-0.5 md:w-6 md:h-0.75 bg-gray-900 rounded-sm transition-all duration-300 ${isMobileMenuOpen ? 'opacity-0' : ''}`}></span>
-                    <span className={`w-5 h-0.5 md:w-6 md:h-0.75 bg-gray-900 rounded-sm transition-all duration-300 ${isMobileMenuOpen ? '-rotate-45 -translate-y-1.5 md:-translate-y-2' : ''}`}></span>
-                </button>
+                    <button
+                        className="md:hidden flex flex-col gap-1 p-2"
+                        onClick={toggleMobileMenu}
+                        aria-label="Toggle mobile menu"
+                    >
+                        <span className={`w-5 h-0.5 md:w-6 md:h-0.75 bg-gray-900 rounded-sm transition-all duration-300 ${isMobileMenuOpen ? 'rotate-45 translate-y-1.5 md:translate-y-2' : ''}`}></span>
+                        <span className={`w-5 h-0.5 md:w-6 md:h-0.75 bg-gray-900 rounded-sm transition-all duration-300 ${isMobileMenuOpen ? 'opacity-0' : ''}`}></span>
+                        <span className={`w-5 h-0.5 md:w-6 md:h-0.75 bg-gray-900 rounded-sm transition-all duration-300 ${isMobileMenuOpen ? '-rotate-45 -translate-y-1.5 md:-translate-y-2' : ''}`}></span>
+                    </button>
+                </div>
             </div>
         </nav>
     );
