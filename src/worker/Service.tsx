@@ -84,9 +84,9 @@ const Spinner = () => (
 );
 const MOCK_PROVIDERS: Provider[] = [
   { id: 1, name: "Sanket Chavan",  role: "Professional Electrician",  rating: 4.9, reviews: 247, experience: "8 yrs",  price: "₹800/hr",  tags: ["Wiring","Panel Upgrades","Lighting"],   avatar: "SC", avatarBg: "#F97316", badge: "Top Rated", available: true  },
-  { id: 2, name: "Priya Sharma",   role: "Home Cleaning Expert",      rating: 4.8, reviews: 312, experience: "5 yrs",  price: "₹500/hr",  tags: ["Deep Clean","Kitchen","Bathroom"],       avatar: "PS", avatarBg: "#8B5CF6", badge: "Popular",   available: true  },
+  { id: 2, name: "Rohit Sharma",   role: "Home Cleaning Expert",      rating: 4.8, reviews: 312, experience: "5 yrs",  price: "₹500/hr",  tags: ["Deep Clean","Kitchen","Bathroom"],       avatar: "PS", avatarBg: "#8B5CF6", badge: "Popular",   available: true  },
   { id: 3, name: "Rajan Mehta",    role: "Licensed Plumber",          rating: 4.7, reviews: 189, experience: "10 yrs", price: "₹700/hr",  tags: ["Pipe Fix","Installation","Leaks"],       avatar: "RM", avatarBg: "#3B82F6", badge: "Verified",  available: false },
-  { id: 4, name: "Anjali Desai",   role: "Beauty & Salon Specialist", rating: 4.9, reviews: 423, experience: "6 yrs",  price: "₹600/hr",  tags: ["Hair","Makeup","Threading"],             avatar: "AD", avatarBg: "#EC4899", badge: "Top Rated", available: true  },
+  { id: 4, name: "axar Desai",   role: "Beauty & Salon Specialist", rating: 4.9, reviews: 423, experience: "6 yrs",  price: "₹600/hr",  tags: ["Hair","Makeup","Threading"],             avatar: "AD", avatarBg: "#EC4899", badge: "Top Rated", available: true  },
   { id: 5, name: "Vikram Singh",   role: "Pest Control Expert",       rating: 4.6, reviews: 156, experience: "7 yrs",  price: "₹900/hr",  tags: ["Bed Bugs","Termites","Rodents"],         avatar: "VS", avatarBg: "#10B981", badge: "Certified", available: true  },
   { id: 6, name: "Meera Nair",     role: "Certified Spa Therapist",   rating: 4.8, reviews: 291, experience: "4 yrs",  price: "₹750/hr",  tags: ["Swedish","Deep Tissue","Aromatherapy"], avatar: "MN", avatarBg: "#F59E0B", badge: "Premium",   available: false },
 ];

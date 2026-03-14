@@ -1,7 +1,7 @@
 export const MOCK_REVIEWS = [
-  { name: "Priya Sharma", rating: 5, text: "Amazing service! The cleaner was professional and thorough. Highly recommend!", avatar: "P", bg: "#F97316" },
+  { name: "Rohit Sharma", rating: 5, text: "Amazing service! The cleaner was professional and thorough. Highly recommend!", avatar: "P", bg: "#F97316" },
   { name: "Rahul Verma", rating: 5, text: "Booked a plumber for an emergency. Arrived on time and fixed everything quickly.", avatar: "R", bg: "#8B5CF6" },
-  { name: "Anjali Patel", rating: 4, text: "Great experience with the salon service. Will definitely book again.", avatar: "A", bg: "#16a34a" },
+  { name: "axar Patel", rating: 4, text: "Great experience with the salon service. Will definitely book again.", avatar: "A", bg: "#16a34a" },
 ];
 
 function Stars({ rating }: { rating: number }) {
