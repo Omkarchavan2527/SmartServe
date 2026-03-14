@@ -2,7 +2,7 @@ export interface Service {
   title: string;
   description: string;
   color: string;
-  icon: string;
+  image: string; // Updated from icon to image
 }
 
 export interface Worker {

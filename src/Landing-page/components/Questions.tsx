@@ -46,47 +46,53 @@ const Questions: React.FC = () => {
   ];
 
   return (
-    <section ref={sectionRef} className="py-[120px] px-[5%] bg-white">
-      <div className="max-w-[1400px] mx-auto">
-        <div className="questions-header text-center mb-[60px]">
-          <h2 className="font-display text-[clamp(2rem,5vw,3.5rem)] font-black">Questions</h2>
+    <section ref={sectionRef} className="py-20 md:py-30 px-[5%] bg-white">
+      <div className="max-w-350 mx-auto">
+        <div className="questions-header text-center mb-10 md:mb-15">
+          <h2 className="font-display text-[clamp(2rem,5vw,3.5rem)] font-black">
+            <span className="md:hidden">Q</span>
+            <span className="hidden md:inline">Questions</span>
+          </h2>
         </div>
 
-        <div className="max-w-[900px] mx-auto">
-          <div className="faq-list flex flex-col gap-4">
+        <div className="max-w-225 mx-auto">
+          <div className="faq-list flex flex-col gap-3 md:gap-4">
             {faqs.map((faq, index) => (
-              <div 
-                key={index} 
+              <div
+                key={index}
                 className={`faq-item bg-white border-2 rounded-xl overflow-hidden transition-all duration-300 ${
                   activeIndex === index ? 'border-primary-green shadow-sm' : 'border-gray-200 hover:border-primary-green'
                 }`}
               >
-                <button 
-                  className="w-full px-7 py-6 flex justify-between items-center text-left font-body text-[1.0625rem] font-semibold text-gray-900 transition-all duration-300 hover:text-primary-green"
+                <button
+                  className="w-full px-5 md:px-7 py-5 md:py-6 flex justify-between items-center text-left font-body text-base md:text-[1.0625rem] font-semibold text-gray-900 transition-all duration-300 hover:text-primary-green"
                   onClick={() => toggleFAQ(index)}
                 >
-                  <span>{faq.question}</span>
+                  <span className="pr-4">{faq.question}</span>
                   <span className={`
-                    w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-2xl font-light
-                    transition-all duration-300 flex-shrink-0 ml-5
+                    w-7 h-7 md:w-8 md:h-8 rounded-full bg-gray-100 flex items-center justify-center text-xl md:text-2xl font-light
+                    transition-all duration-300 shrink-0 ml-3 md:ml-5
                     ${activeIndex === index ? 'bg-primary-green text-white rotate-180' : ''}
                   `}>
                     {activeIndex === index ? '−' : '+'}
                   </span>
                 </button>
-                
-                <div 
+
+                <div
                   className={`transition-all duration-300 overflow-hidden ${
-                    activeIndex === index ? 'max-h-[300px] px-7 pb-6' : 'max-h-0 px-7 pb-0'
+                    activeIndex === index ? 'max-h-75 px-5 md:px-7 pb-5 md:pb-6' : 'max-h-0 px-5 md:px-7 pb-0'
                   }`}
                 >
-                  <p className="text-base leading-relaxed text-gray-600">{faq.answer}</p>
+                  <p className="text-sm md:text-base leading-relaxed text-gray-600">{faq.answer}</p>
                 </div>
               </div>
             ))}
           </div>
         </div>
+
+        {/* Service Footer */}
       </div>
+
     </section>
   );
 };

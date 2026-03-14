@@ -1,6 +1,8 @@
-import React, { useEffect, useLayoutEffect, useRef } from 'react';
+import React, { useLayoutEffect, useRef } from 'react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
+
+gsap.registerPlugin(ScrollTrigger);
 import type { Testimonial } from '../types/index';
 
 const Feedback: React.FC = () => {
@@ -35,26 +37,26 @@ const Feedback: React.FC = () => {
   ];
 
   return (
-    <section ref={sectionRef} className="py-[120px] px-[5%] bg-white">
-      <div className="max-w-[1400px] mx-auto">
-        <div className="feedback-header text-center mb-[60px]">
+    <section ref={sectionRef} className="py-20 md:py-30 px-[5%] bg-white">
+      <div className="max-w-350 mx-auto">
+        <div className="feedback-header text-center mb-10 md:mb-15">
           <h2 className="font-display text-[clamp(2rem,5vw,3.5rem)] font-black mb-4">Real feedback</h2>
           <p className="text-lg text-gray-600">What people are saying</p>
         </div>
 
-        <div className="testimonials-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <div className="testimonials-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
           {testimonials.map((testimonial, index) => (
-            <div 
-              key={index} 
-              className="testimonial-card bg-white rounded-[20px] p-8 shadow-md relative overflow-hidden transition-all duration-[400ms] border-2 border-transparent hover:-translate-y-2 hover:shadow-lg group"
+            <div
+              key={index}
+              className="testimonial-card bg-white rounded-[15px] md:rounded-[20px] p-6 md:p-8 shadow-md relative overflow-hidden transition-all duration-400 border-2 border-transparent hover:-translate-y-2 hover:shadow-lg group"
               style={{ '--card-color': testimonial.color } as React.CSSProperties}
               onMouseEnter={(e) => e.currentTarget.style.borderColor = testimonial.color}
               onMouseLeave={(e) => e.currentTarget.style.borderColor = 'transparent'}
             >
-              <div className="flex items-center gap-4 mb-5">
-                <div className="flex-shrink-0">
-                  <div 
-                    className="w-14 h-14 rounded-full flex items-center justify-center relative overflow-hidden"
+              <div className="flex items-center gap-3 md:gap-4 mb-4 md:mb-5">
+                <div className="shrink-0">
+                  <div
+                    className="w-12 h-12 md:w-14 md:h-14 rounded-full flex items-center justify-center relative overflow-hidden"
                     style={{ background: `linear-gradient(135deg, ${testimonial.color}, rgba(0,0,0,0.1))` }}
                   >
                     <div className="absolute w-full h-full bg-radial-gradient" style={{
@@ -62,22 +64,22 @@ const Feedback: React.FC = () => {
                     }} />
                   </div>
                 </div>
-                <div className="flex-1">
-                  <h4 className="font-bold text-lg text-gray-900 mb-1">{testimonial.name}</h4>
+                <div className="flex-1 min-w-0">
+                  <h4 className="font-bold text-base md:text-lg text-gray-900 mb-1 truncate">{testimonial.name}</h4>
                   <p className="text-sm text-gray-600">{testimonial.role}</p>
                 </div>
               </div>
 
-              <div className="flex gap-1 mb-4">
+              <div className="flex gap-1 mb-3 md:mb-4">
                 {[...Array(testimonial.rating)].map((_, i) => (
-                  <span key={i} className="text-yellow-400 text-xl">★</span>
+                  <span key={i} className="text-yellow-400 text-lg md:text-xl">★</span>
                 ))}
               </div>
 
-              <p className="text-base leading-relaxed text-gray-600 relative z-[2]">{testimonial.text}</p>
+              <p className="text-sm md:text-base leading-relaxed text-gray-600 relative z-2">{testimonial.text}</p>
 
-              <div 
-                className="absolute bottom-[-30px] right-[-30px] w-[120px] h-[120px] rounded-full opacity-5 transition-all duration-[400ms] group-hover:scale-150 group-hover:opacity-10"
+              <div
+                className="absolute -bottom-5 md:-bottom-7.5 -right-5 md:-right-7.5 w-25 md:w-30 h-25 md:h-30 rounded-full opacity-5 transition-all duration-400 group-hover:scale-150 group-hover:opacity-10"
                 style={{ backgroundColor: testimonial.color }}
               />
             </div>

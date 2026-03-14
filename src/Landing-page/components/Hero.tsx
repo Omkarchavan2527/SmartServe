@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import gsap from 'gsap';
+import videoSrc from '../../assets/VID-20260223-WA0001.mp4';
 
 const Hero: React.FC = () => {
   const heroRef = useRef<HTMLElement>(null); // This ref is for the entire section, used by GSAP context.
@@ -43,44 +44,39 @@ const Hero: React.FC = () => {
   }, []);
 
   return (
+
     <section
       ref={heroRef}
       className="relative  min-h-screen flex items-center  overflow-hidden bg-linear-to-br from-[#1a5f4f] to-[#0d3d31]"
-      style={{
-        backgroundImage: `
-         radial-gradient(circle at 20% 50%, #144b3e 0%, #1a5f4f 50%),
-          radial-gradient(circle at 80% 80%, #ffffff 0%, #317666 50%)
-        `
-      }}
-    >
-      <div className="relative z-10 max-w-1400px mx-auto px-[5%] grid gap-20 items-center justify-center w-full">
-        <div className="text-white text-center md:text-left">
+  >
+      <video src={videoSrc} autoPlay loop muted className="absolute inset-0 w-full h-full object-cover  z-0"></video>
+
+      <div className="relative z-10 max-w-1400px mx-auto px-[5%] py-8 md:py-16">
+        <div className="text-white text-left">
           <h1
             ref={titleRef}
-            className="font-bold pb-6  text-[clamp(3rem,8vw,5.5rem)] tracking-[0.09em] uppercase leading-[0.95] mb-6 "
+            className="font-bold pb-4 md:pb-6 text-[clamp(2.5rem,8vw,5.5rem)] tracking-[0.09em] uppercase leading-[0.95] mb-4 md:mb-6"
           >
             Find the right service worker today
           </h1>
-          <div className='md:grid md:grid-cols-2'>
-            {/* Subtitle for larger screens (md and up) */}
-            <p
-              className="hero-subtitle-text hidden md:block text-lg leading-relaxed mb-10 opacity-95 max-w-[540px]"
-            >
-              Connect with trusted electricians, plumbers, carpenters and
-              more to your dispatch centers and servers efficiently when you need them!
-            </p>
-            <div ref={imageRef} className="relative flex justify-center items-center">
-              <img src="src\assets\ChatGPT Image Jan 31, 2026, 10_46_09 AM.png.jpg" className='h-50 w-2xl rounded-lg shadow-amber-50 ' alt="" />
-              {/* Subtitle for small screens, positioned absolutely over the image */}
-              <p
-                className="hero-subtitle-text absolute inset-0 flex items-center justify-center text-center p-4 text-lg leading-relaxed opacity-95 md:hidden"
-                style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.7)' }} // Added for better readability on image
-            >
-              Connect with trusted electricians, plumbers, carpenters and
-              more to your dispatch centers and servers efficiently when you need them!
-              </p>
+
+          {/* Mobile-first approach: subtitle always visible */}
+          <p
+            className="hero-subtitle-text text-base md:text-lg leading-relaxed mb-6 md:mb-10 opacity-95 max-w-135 mx-auto"
+          >
+            Connect with trusted electricians, plumbers, carpenters and more to your dispatch centers and servers efficiently when you need them!
+          </p>
+
+
+          {/* Desktop layout with grid */}
+          {/* <div className='hidden md:grid md:grid-cols-2 gap-8 md:gap-20 items-center'>
+            <div className="order-2 md:order-1">
+              {/* Subtitle for desktop (already above) */}
+          {/* </div>
+            <div ref={imageRef} className="relative flex justify-center items-center order-1 md:order-2">
+              <img src="src\assets\ChatGPT Image Jan 31, 2026, 10_46_09 AM.png.jpg" className='h-50 w-auto max-w-full rounded-lg shadow-amber-50' alt="" />
             </div>
-          </div>
+          </div> */}
 
           {/* <div className="search-box bg-white rounded-xl p-2 shadow-lg max-w-[600px]">
             <div className="flex gap-2 items-center flex-col md:flex-row">
