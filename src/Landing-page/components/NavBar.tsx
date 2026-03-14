@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import gsap from 'gsap';
+import logo from '../../assets/d6df9d4e-3893-4593-a1ee-a8a42c6c5cf8.png';
 
 interface NavbarProps {
   onLoginClick?: () => void;
@@ -31,7 +32,7 @@ const Navbar: React.FC<NavbarProps> = ({ onLoginClick, onLogoClick }) => {
             <div className="max-w-1400px mx-auto flex justify-between items-center ">
                 <div className="flex items-center gap-2 md:gap-3 cursor-pointer group" onClick={onLogoClick}>
                     <div className="transition-transform duration-300  group-hover:scale-105">
-                        <img src="src\assets\d6df9d4e-3893-4593-a1ee-a8a42c6c5cf8.png" className='h-12 md:h-16' alt="SmartServe" />
+                        <img src={logo} className='h-12 md:h-16' alt="SmartServe" />
                     </div>
                 </div>
 

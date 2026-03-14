@@ -2,6 +2,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import type { Service } from '../types/index';
+import electricianImg from '../../assets/electrician.jpg';
+import painterImg from '../../assets/painter.jpg';
+import carpainterImg from '../../assets/carpainter.jpg';
 
 // Register ScrollTrigger plugin
 gsap.registerPlugin(ScrollTrigger);
@@ -18,31 +21,31 @@ const Services: React.FC = () => {
       title: 'ELECTRICIAN',
       description: 'Professional electrical services for homes and businesses. Expert wiring, panel upgrades, lighting installation, and electrical repairs.',
       color: '#e63946',
-      image: 'src/assets/electrician.jpg'
+      image: electricianImg
     },
     {
       title: 'PLUMBER',
       description: 'Professional plumbing services for all your home and commercial needs. Expert leak detection and pipe repair.',
       color: '#2a7f6a',
-      image: 'src/assets/electrician.jpg' // Using electrician image as placeholder for plumber
+      image: electricianImg // Using electrician image as placeholder for plumber
     },
     {
       title: 'PAINTER',
       description: 'Expert painting and finishing services for interiors and exteriors. Professional quality guaranteed.',
       color: '#f77f00',
-      image: 'src/assets/painter.jpg'
+      image: painterImg
     },
     {
       title: 'CARPENTER',
       description: 'Custom woodwork and carpentry services. Quality craftsmanship for your home and office.',
       color: '#6366f1',
-      image: 'src/assets/carpainter.jpg'
+      image: carpainterImg
     },
     {
       title: 'MECHANIC',
       description: 'Auto repair and maintenance services. Expert diagnostics and reliable fixes for all vehicles.',
       color: '#ec4899',
-      image: 'src/assets/electrician.jpg' // Using electrician image as placeholder for mechanic
+      image: electricianImg // Using electrician image as placeholder for mechanic
     }
   ];
 

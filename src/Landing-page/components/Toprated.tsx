@@ -2,6 +2,9 @@ import React, { useLayoutEffect, useRef } from 'react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import type { Worker } from '../types/index';
+import electricianImg from '../../assets/electrician.jpg';
+import painterImg from '../../assets/painter.jpg';
+import carpainterImg from '../../assets/carpainter.jpg';
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -9,9 +12,9 @@ const TopRated: React.FC = () => {
   const sectionRef = useRef<HTMLElement | null>(null);
 
   const workers: Worker[] = [
-    { name: 'electrician', specialty: 'Engine diagnosis and repairs', imgsrc: 'src/assets/electrician.jpg', rating: 4.9 },
-    { name: 'Painter', specialty: 'Interior painting professional', imgsrc: 'src/assets/painter.jpg', rating: 4.8 },
-    { name: 'Carpainter', specialty: 'Quick leak detection specialist', imgsrc: 'src/assets/carpainter.jpg', rating: 4.9 },
+    { name: 'electrician', specialty: 'Engine diagnosis and repairs', imgsrc: electricianImg, rating: 4.9 },
+    { name: 'Painter', specialty: 'Interior painting professional', imgsrc: painterImg, rating: 4.8 },
+    { name: 'Carpainter', specialty: 'Quick leak detection specialist', imgsrc: carpainterImg, rating: 4.9 },
   ];
 
   useLayoutEffect(() => {
