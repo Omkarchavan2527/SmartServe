@@ -463,10 +463,10 @@ const LoginForm = ({
         <div style={{ flex: 1, height: 1, background: "#E5E7EB" }} />
       </div>
 
-      <button style={{ width: "100%", background: "#fff", border: "1.5px solid #E5E7EB", borderRadius: 12, padding: "12px 0", display: "flex", alignItems: "center", justifyContent: "center", gap: 12, fontSize: 14, fontWeight: 600, color: "#374151", cursor: "pointer" }}>
+      {/* <button style={{ width: "100%", background: "#fff", border: "1.5px solid #E5E7EB", borderRadius: 12, padding: "12px 0", display: "flex", alignItems: "center", justifyContent: "center", gap: 12, fontSize: 14, fontWeight: 600, color: "#374151", cursor: "pointer" }}>
         <span style={{ fontSize: 18, fontWeight: 800, color: "#4285F4" }}>G</span>
         Continue with Google
-      </button>
+      </button> */}
 
       <div style={{ marginTop: 16, padding: "12px 16px", background: "#F9FAFB", borderRadius: 12, border: "1px solid #F3F4F6" }}>
         <div style={{ fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 6 }}>🔐 How role detection works</div>

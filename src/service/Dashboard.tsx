@@ -1,8 +1,10 @@
 // ─── DashboardPage.tsx ────────────────────────────────────────────────────────
 import React, { useState, useEffect, useRef } from "react";
 import { gsap } from "gsap";
-import { BASE, api, type ProviderProfile, type Appointment, type Review } from "./Dashboardtypes";
+import { BASE, api } from "./Dashboardtypes";
+import type { ProviderProfile, Appointment, Review } from "./Dashboardtypes";
 import { Avatar, StatusBadge, Spinner, Toast, useIsMobile } from "./Dashboardshared";
+import { MapModal } from "./Appoinmentspage";
 
 const EarningsChart = () => {
   const pathRef = useRef<SVGPathElement>(null);
@@ -39,12 +41,14 @@ const EarningsChart = () => {
   );
 };
 
-const DashboardPage = ({ profile, appointments, token, onRefresh }: {
-  profile: ProviderProfile | null; appointments: Appointment[]; token: string; onRefresh: () => void;
+const DashboardPage = ({ profile, appointments, token, onRefresh, onOpenChat }: {
+  profile: ProviderProfile | null; appointments: Appointment[]; token: string;
+  onRefresh: () => void; onOpenChat?: (appointmentId: number) => void;
 }) => {
   const cardsRef = useRef<HTMLDivElement>(null);
   const isMobile = useIsMobile();
   const [reviews,  setReviews]  = useState<Review[]>([]);
+  const [mapAppt,  setMapAppt]  = useState<Appointment | null>(null);
   const [loadingR, setLoadingR] = useState(false);
   const [saving,   setSaving]   = useState<Record<number,boolean>>({});
   const [toast,    setToast]    = useState<{ msg: string; ok: boolean } | null>(null);
@@ -91,6 +95,7 @@ const DashboardPage = ({ profile, appointments, token, onRefresh }: {
   return (
     <div className="ds-page">
       {toast && <Toast msg={toast.msg} ok={toast.ok} />}
+      {mapAppt !== null && <MapModal appointment={mapAppt} onClose={() => setMapAppt(null)} />}
 
       {/* Welcome */}
       <div style={{ marginBottom: 20 }}>
@@ -159,7 +164,28 @@ const DashboardPage = ({ profile, appointments, token, onRefresh }: {
                   <div style={{ fontSize: 13, fontWeight: 600, color: "#374151", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{a.customer_name}</div>
                   <div style={{ fontSize: 11, color: "#9CA3AF" }}>{a.service_name} · {fmt(a.scheduled_date)}</div>
                 </div>
-                <StatusBadge status={a.status} />
+                <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" as const }}>
+                  <StatusBadge status={a.status} />
+                  {a.status === "ongoing" && (
+                    <span style={{ fontSize: 10, fontWeight: 700, color: "#8b5cf6", background: "#F5F3FF", border: "1px solid #DDD6FE", borderRadius: 6, padding: "2px 6px" }}>
+                      💳 Pay pending
+                    </span>
+                  )}
+                  {/* {(a.status === "accepted" || a.status === "ongoing") && (
+                    <button onClick={() => onOpenChat?.(a.id)}
+                      title="Chat with customer"
+                      style={{ background: "#F97316", border: "none", borderRadius: 8, width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 13, flexShrink: 0 }}>
+                      💬
+                    </button>
+                  )} */}
+                  {(a.status === "accepted" || a.status === "ongoing") && (
+                    <button onClick={() => setMapAppt(a)}
+                      title="View route to customer"
+                      style={{ background: "#3b82f6", border: "none", borderRadius: 8, width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 13, flexShrink: 0 }}>
+                      🗺️
+                    </button>
+                  )}
+                </div>
               </div>
             ))
           }
@@ -188,6 +214,12 @@ const DashboardPage = ({ profile, appointments, token, onRefresh }: {
                     ✕ Reject
                   </button>
                 </div>
+                {a.status === "accepted" && (
+                  <button onClick={() => onOpenChat?.(a.id)}
+                    style={{ width: "100%", marginTop: 4, background: "#FFF7ED", color: "#F97316", border: "1px solid #FED7AA", fontSize: 12, fontWeight: 700, padding: "8px 0", borderRadius: 8, cursor: "pointer" }}>
+                    💬 Chat with Customer
+                  </button>
+                )}
               </div>
             ))
           }
