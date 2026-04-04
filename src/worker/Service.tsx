@@ -448,7 +448,7 @@ const BookingModal = ({
 
 // ─── My Bookings Panel — GET /appointments + DELETE /appointments/:id ─────────
 const MyBookingsPanel = ({
-  token, onClose, onLeaveReview, onBookAgain, onOpenChat, reviewedApptId, onPay, paidApptIds,
+  token, onClose, onLeaveReview, onBookAgain, onOpenChat: _onOpenChat, reviewedApptId, onPay, paidApptIds,
 }: {
   token: string;
   onClose: () => void;
@@ -1005,7 +1005,7 @@ const PaymentModal = ({ appointmentId, serviceName, amountRupees, providerName, 
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export function SmartServeLanding({
-  onLoginClick, onPartnerClick,
+  onLoginClick, onPartnerClick: _onPartnerClick,
   isLoggedIn = false, userName,
   accessToken, onLogout, onOpenChat,
 }: LandingProps) {
