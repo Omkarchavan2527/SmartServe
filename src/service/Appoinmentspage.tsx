@@ -383,7 +383,7 @@ const AppointmentDrawer = ({ appointmentId, token, onClose }: {
 };
 
 // ─── AppointmentsPage ─────────────────────────────────────────────────────────
-const AppointmentsPage = ({ token, appointments, loading, error, onRefresh, onOpenChat }: {
+const AppointmentsPage = ({ token, appointments, loading, error, onRefresh, onOpenChat: _onOpenChat }: {
   token: string; appointments: Appointment[]; loading: boolean; error: string;
   onRefresh: () => void; onOpenChat?: (appointmentId: number) => void;
 }) => {
