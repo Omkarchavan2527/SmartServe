@@ -158,7 +158,7 @@ const StepBar = ({ current, total, labels }: { current: number; total: number; l
   </div>
 );
 
-// ─── Mobile Header Banner (replaces left panel on mobile) ────────────────────
+// ─── Mobile Header Banner ─────────────────────────────────────────────────────
 const MobileHeader = ({ page, role }: { page: AuthPage; role: Role }) => {
   const isProvider = role === "provider";
   return (
@@ -463,11 +463,6 @@ const LoginForm = ({
         <div style={{ flex: 1, height: 1, background: "#E5E7EB" }} />
       </div>
 
-      {/* <button style={{ width: "100%", background: "#fff", border: "1.5px solid #E5E7EB", borderRadius: 12, padding: "12px 0", display: "flex", alignItems: "center", justifyContent: "center", gap: 12, fontSize: 14, fontWeight: 600, color: "#374151", cursor: "pointer" }}>
-        <span style={{ fontSize: 18, fontWeight: 800, color: "#4285F4" }}>G</span>
-        Continue with Google
-      </button> */}
-
       <div style={{ marginTop: 16, padding: "12px 16px", background: "#F9FAFB", borderRadius: 12, border: "1px solid #F3F4F6" }}>
         <div style={{ fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 6 }}>🔐 How role detection works</div>
         <div style={{ fontSize: 12, color: "#6B7280", lineHeight: 1.6 }}>
@@ -614,17 +609,8 @@ const UserSignupForm = ({
         <div style={{ gridColumn: "1/-1" }}>
           <Input label="Email Address" placeholder="name@email.com" type="email" value={form.email} onChange={set("email")} error={errors.email} />
         </div>
-        {isMobile ? (
-          <>
-            <Input label="Phone Number" placeholder="+91 98765 43210" value={form.phone} onChange={set("phone")} icon="📱" error={errors.phone} />
-            <Select label="City" value={form.city} onChange={set("city")} options={CITIES} placeholder="Select city" />
-          </>
-        ) : (
-          <>
-            <Input label="Phone Number" placeholder="+91 98765 43210" value={form.phone} onChange={set("phone")} icon="📱" error={errors.phone} />
-            <Select label="City" value={form.city} onChange={set("city")} options={CITIES} placeholder="Select city" />
-          </>
-        )}
+        <Input label="Phone Number" placeholder="+91 98765 43210" value={form.phone} onChange={set("phone")} icon="📱" error={errors.phone} />
+        <Select label="City" value={form.city} onChange={set("city")} options={CITIES} placeholder="Select city" />
         <div style={{ gridColumn: "1/-1" }}>
           <Input label="Password" placeholder="Min 8 characters" type="password" value={form.password} onChange={set("password")} error={errors.password} />
         </div>
@@ -668,12 +654,41 @@ const ProviderSignupForm = ({
     fullName: "", email: "", phone: "", city: "", password: "", confirmPassword: "",
     serviceName: "", serviceCategory: "", experience: "", bio: "", serviceAreas: "", basePrice: "", idProof: "", skills: "Wiring,Panel Upgrades,Lighting",
   });
-  const [agreed,   setAgreed]   = useState(false);
-  const [loading,  setLoading]  = useState(false);
-  const [apiError, setApiError] = useState("");
-  const [submitted,setSubmitted]= useState(false);
+  const [agreed,     setAgreed]     = useState(false);
+  const [loading,    setLoading]    = useState(false);
+  const [apiError,   setApiError]   = useState("");
+  const [submitted,  setSubmitted]  = useState(false);
+
+  // ── ID upload state ──────────────────────────────────────────────────────
+  const [idPreview,  setIdPreview]  = useState<string>("");   // base64 data URL or "pdf"
+  const [idFileName, setIdFileName] = useState<string>("");
 
   const set = (k: keyof FormState) => (v: string) => setForm((f) => ({ ...f, [k]: v }));
+
+  const handleIdFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      alert("File must be under 5 MB.");
+      e.target.value = "";
+      return;
+    }
+    setIdFileName(file.name);
+    if (file.type === "application/pdf") {
+      setIdPreview("pdf");
+    } else {
+      const reader = new FileReader();
+      reader.onload = (ev) => setIdPreview(ev.target?.result as string);
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const clearIdFile = () => {
+    setIdPreview("");
+    setIdFileName("");
+    const input = document.getElementById("idFileInput") as HTMLInputElement | null;
+    if (input) input.value = "";
+  };
 
   const handleSubmit = async () => {
     if (!agreed) { setApiError("Please agree to the Terms of Service"); return; }
@@ -776,23 +791,124 @@ const ProviderSignupForm = ({
       );
       case 3: return (
         <>
+          {/* Warning banner */}
           <div style={{ background: "#FFF7ED", border: "1px solid #FED7AA", borderRadius: 14, padding: 16, marginBottom: 16 }}>
             <div style={{ fontWeight: 700, fontSize: 14, color: "#92400E", marginBottom: 4 }}>🔒 Identity Verification Required</div>
             <p style={{ fontSize: 13, color: "#78350F", lineHeight: 1.6, margin: 0 }}>
               To protect our customers, all service providers must verify their identity.
             </p>
           </div>
-          <Select label="ID Proof Type" value={form.idProof} onChange={set("idProof")}
-            options={["Aadhaar Card","PAN Card","Passport","Voter ID","Driving License"]} placeholder="Select ID type" />
+
+          {/* ID type selector */}
+          <Select
+            label="ID Proof Type"
+            value={form.idProof}
+            onChange={set("idProof")}
+            options={["Aadhaar Card","PAN Card","Passport","Voter ID","Driving License"]}
+            placeholder="Select ID type"
+          />
+
+          {/* Upload area */}
           <div style={{ marginBottom: 14 }}>
-            <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>Upload ID Document</label>
-            <div style={{ border: "2px dashed #D1D5DB", borderRadius: 12, padding: "24px 20px", textAlign: "center", cursor: "pointer", background: "#FAFAFA" }}>
-              <div style={{ fontSize: 26, marginBottom: 6 }}>📎</div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: "#374151", marginBottom: 4 }}>Drop file or tap to upload</div>
-              <div style={{ fontSize: 12, color: "#9CA3AF" }}>PNG, JPG or PDF • Max 5MB</div>
-            </div>
+            <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
+              Upload ID Document
+            </label>
+
+            {/* Hidden file input */}
+            <input
+              id="idFileInput"
+              type="file"
+              accept="image/jpeg,image/png,image/jpg,application/pdf"
+              style={{ display: "none" }}
+              onChange={handleIdFileChange}
+            />
+
+            {/* Drop zone — shown when no file selected */}
+            {!idPreview && (
+              <div
+                onClick={() => (document.getElementById("idFileInput") as HTMLInputElement)?.click()}
+                style={{
+                  border: "2px dashed #D1D5DB",
+                  borderRadius: 12,
+                  padding: "28px 20px",
+                  textAlign: "center",
+                  cursor: "pointer",
+                  background: "#FAFAFA",
+                  transition: "border-color 0.2s, background 0.2s",
+                }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLDivElement).style.borderColor = "#15803D";
+                  (e.currentTarget as HTMLDivElement).style.background = "#F0FDF4";
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLDivElement).style.borderColor = "#D1D5DB";
+                  (e.currentTarget as HTMLDivElement).style.background = "#FAFAFA";
+                }}
+              >
+                <div style={{ fontSize: 28, marginBottom: 8 }}>📎</div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: "#374151", marginBottom: 4 }}>
+                  Tap to choose image or PDF
+                </div>
+                <div style={{ fontSize: 12, color: "#9CA3AF" }}>JPG, PNG or PDF · Max 5 MB</div>
+              </div>
+            )}
+
+            {/* Preview card — shown after file selected */}
+            {idPreview && (
+              <div style={{ border: "1.5px solid #BBF7D0", borderRadius: 12, overflow: "hidden", background: "#fff" }}>
+
+                {/* Header row */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", background: "#F0FDF4", borderBottom: "1px solid #BBF7D0" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontSize: 16 }}>✅</span>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: "#15803D", maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
+                      {idFileName}
+                    </span>
+                  </div>
+                  <button
+                    onClick={clearIdFile}
+                    style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#9CA3AF", lineHeight: 1, padding: "0 2px" }}
+                    title="Remove file"
+                  >×</button>
+                </div>
+
+                {/* Image preview */}
+                {idPreview !== "pdf" && (
+                  <img
+                    src={idPreview}
+                    alt="ID document preview"
+                    style={{ width: "100%", maxHeight: 200, objectFit: "cover", display: "block" }}
+                  />
+                )}
+
+                {/* PDF placeholder */}
+                {idPreview === "pdf" && (
+                  <div style={{ padding: "24px 20px", textAlign: "center", color: "#6B7280" }}>
+                    <div style={{ fontSize: 32, marginBottom: 8 }}>📄</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "#374151" }}>PDF document selected</div>
+                    <div style={{ fontSize: 12, color: "#9CA3AF", marginTop: 4 }}>{idFileName}</div>
+                  </div>
+                )}
+
+                {/* Footer note */}
+                <div style={{ padding: "8px 14px", borderTop: "1px solid #E5E7EB", fontSize: 11, color: "#9CA3AF", textAlign: "center" as const }}>
+                  Preview only — not uploaded or saved to any server
+                </div>
+              </div>
+            )}
+
+            {/* Change file button when preview is visible */}
+            {idPreview && (
+              <button
+                onClick={() => (document.getElementById("idFileInput") as HTMLInputElement)?.click()}
+                style={{ marginTop: 8, fontSize: 12, color: "#15803D", fontWeight: 600, background: "none", border: "none", cursor: "pointer", padding: 0 }}
+              >
+                ↩ Choose a different file
+              </button>
+            )}
           </div>
 
+          {/* Account summary */}
           <div style={{ background: "#F9FAFB", borderRadius: 14, padding: 14, marginBottom: 14 }}>
             <div style={{ fontWeight: 600, fontSize: 14, color: "#374151", marginBottom: 8 }}>Account Summary</div>
             {[
@@ -925,10 +1041,7 @@ export function SmartServeAuth({
   if (isMobile) {
     return (
       <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh", width: "100%", fontFamily: "'Outfit', 'DM Sans', system-ui, sans-serif", background: "#F8FAFC" }}>
-        {/* Mobile top header */}
         <MobileHeader page={page} role={role} />
-
-        {/* Tab switcher */}
         <div style={{ display: "flex", gap: 0, background: "#fff", borderBottom: "1px solid #E5E7EB" }}>
           {(["login","signup"] as AuthPage[]).map((p) => (
             <button key={p} onClick={() => { if (p === "login") goLogin(); else goSignup(); }}
@@ -944,8 +1057,6 @@ export function SmartServeAuth({
             </button>
           ))}
         </div>
-
-        {/* Scrollable content */}
         <div style={{ flex: 1, overflowY: "auto", padding: "24px 20px 40px" }}>
           {rightContent()}
         </div>
@@ -953,17 +1064,12 @@ export function SmartServeAuth({
     );
   }
 
-  // ── Desktop layout (unchanged) ────────────────────────────────────────────
+  // ── Desktop layout ────────────────────────────────────────────────────────
   return (
     <div style={{ display: "flex", minHeight: "100vh", width: "100%", fontFamily: "'Outfit', 'DM Sans', system-ui, sans-serif", background: "#F8FAFC" }}>
-      {/* Left */}
       <LeftPanel page={page} role={role} />
-
-      {/* Right */}
       <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "40px 60px", background: "#F8FAFC", position: "relative", overflowY: "auto" }}>
         <div style={{ position: "absolute", top: -60, right: -60, width: 200, height: 200, borderRadius: "50%", background: "rgba(6,78,59,0.08)", pointerEvents: "none" }} />
-
-        {/* Tab switcher */}
         <div style={{ position: "absolute", top: 28, right: 32, display: "flex", gap: 6 }}>
           {(["login","signup"] as AuthPage[]).map((p) => (
             <button key={p} onClick={() => { if (p === "login") goLogin(); else goSignup(); }}
@@ -972,7 +1078,6 @@ export function SmartServeAuth({
             </button>
           ))}
         </div>
-
         {rightContent()}
       </div>
     </div>
