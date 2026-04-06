@@ -171,8 +171,8 @@ const ProviderCard = ({
   p, onBook, onViewProfile,
 }: {
   p: Provider;
-  onBook: (id: number) => void;        // triggers booking flow
-  onViewProfile: (id: number) => void; // opens profile modal
+  onBook: (id: number) => void;
+  onViewProfile: (id: number) => void;
 }) => {
   const [hovered, setHovered] = useState(false);
   return (
@@ -224,14 +224,12 @@ const ProviderCard = ({
       </div>
 
       <div style={{ display: "flex", gap: 10 }}>
-        {/* Book Now — calls handleBookProvider(id) in parent */}
         <button
           onClick={() => onBook(p.id)}
           style={{ flex: 1, background: "#F97316", color: "#fff", fontWeight: 700, fontSize: 14, padding: "11px 0", borderRadius: 12, border: "none", cursor: "pointer", opacity: p.available ? 1 : 0.6 }}
           onMouseEnter={e => (e.currentTarget.style.background = "#EA6C0A")}
           onMouseLeave={e => (e.currentTarget.style.background = "#F97316")}
         >📅 Book Now</button>
-        {/* Info — opens GET /providers/:id profile modal */}
         <button
           onClick={() => onViewProfile(p.id)}
           title="View full profile"
@@ -242,13 +240,13 @@ const ProviderCard = ({
   );
 };
 
-// ─── Provider Profile Modal — GET /providers/:id ─────────────────────────────
+// ─── Provider Profile Modal ───────────────────────────────────────────────────
 const ProviderProfileModal = ({
   providerId, onClose, onBook,
 }: {
   providerId: number;
   onClose: () => void;
-  onBook: (provider: ApiProviderDetail) => void; // passes full detail so parent skips re-fetch
+  onBook: (provider: ApiProviderDetail) => void;
 }) => {
   const [data,    setData]    = React.useState<ApiProviderDetail | null>(null);
   const [loading, setLoading] = React.useState(true);
@@ -270,7 +268,6 @@ const ProviderProfileModal = ({
   return (
     <div className="ss-modal-wrap" onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 400, display: "flex", alignItems: "center", justifyContent: "center" }}>
       <div className="ss-modal-box" onClick={e => e.stopPropagation()} style={{ background: "#fff", borderRadius: 24, padding: 28, width: 520, maxWidth: "92vw", maxHeight: "88vh", overflowY: "auto", boxShadow: "0 24px 72px rgba(0,0,0,0.2)" }}>
-        {/* drag handle for mobile */}
         <div style={{ width: 40, height: 4, background: "#E5E7EB", borderRadius: 2, margin: "0 auto 18px" }} />
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 18 }}>
           <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Provider Profile</h3>
@@ -325,7 +322,6 @@ const ProviderProfileModal = ({
                 ))}
               </div>
             )}
-            {/* Book button — calls onBook(data.id) which opens BookingModal in parent */}
             <button
               onClick={() => data && onBook(data)}
               style={{ width: "100%", background: "#F97316", color: "#fff", fontWeight: 700, fontSize: 15, padding: "13px 0", borderRadius: 14, border: "none", cursor: "pointer" }}
@@ -346,15 +342,39 @@ const BookingModal = ({
   onClose: () => void;
   onBooked: (appt?: { id: number; service_name: string; agreed_price: number }) => void;
 }) => {
-  const [form, setForm] = React.useState({ location: "", area: "", date: "", start: "09:00", end: "11:00", description: "" });
+  const [form, setForm] = React.useState({
+    location: "", area: "", date: "", start: "09:00", end: "11:00", description: "",
+  });
   const [saving, setSaving] = React.useState(false);
   const [error,  setError]  = React.useState("");
 
-  const price = provider.base_price_per_hour * 2;
+  // ── Dynamic hour & price calculation ─────────────────────────────────────
+  const calcHours = (start: string, end: string): number => {
+    const [sh, sm] = start.split(":").map(Number);
+    const [eh, em] = end.split(":").map(Number);
+    const diffMins = (eh * 60 + em) - (sh * 60 + sm);
+    return diffMins > 0 ? parseFloat((diffMins / 60).toFixed(2)) : 0;
+  };
+
+  const hours = calcHours(form.start, form.end);
+  const price = Math.round(provider.base_price_per_hour * hours);
+
+  const formatHours = (h: number): string => {
+    if (h <= 0) return "—";
+    if (h === Math.floor(h)) return `${h} hr${h !== 1 ? "s" : ""}`;
+    const whole = Math.floor(h);
+    const mins  = Math.round((h - whole) * 60);
+    if (whole === 0) return `${mins} min`;
+    return `${whole} hr${whole !== 1 ? "s" : ""} ${mins} min`;
+  };
+  // ─────────────────────────────────────────────────────────────────────────
 
   const submit = async () => {
-    if (!form.location.trim()) { setError("Please enter a location"); return; }
-    if (!form.date)             { setError("Please select a date");     return; }
+    if (!form.location.trim()) { setError("Please enter a location");                return; }
+    if (!form.date)             { setError("Please select a date");                   return; }
+    if (hours <= 0)             { setError("End time must be after start time");      return; }
+    if (hours < 0.5)            { setError("Minimum booking duration is 30 minutes"); return; }
+
     setSaving(true); setError("");
     try {
       const res = await fetch(`${BASE}/appointments`, {
@@ -368,7 +388,7 @@ const BookingModal = ({
           scheduledDate:  form.date,
           scheduledStart: form.start,
           scheduledEnd:   form.end,
-          agreedPrice:    price,
+          agreedPrice:    price,          // ← uses calculated price
           description:    form.description,
         }),
       });
@@ -385,7 +405,15 @@ const BookingModal = ({
     }
   };
 
-  const inp: React.CSSProperties = { width: "100%", border: "1px solid #E5E7EB", borderRadius: 10, padding: "10px 12px", fontSize: 14, outline: "none", boxSizing: "border-box" };
+  const inp: React.CSSProperties = {
+    width: "100%", border: "1px solid #E5E7EB", borderRadius: 10,
+    padding: "10px 12px", fontSize: 14, outline: "none", boxSizing: "border-box",
+  };
+
+  const timeInp: React.CSSProperties = {
+    ...inp,
+    cursor: "pointer",
+  };
 
   return (
     <div className="ss-modal-wrap" onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -394,52 +422,149 @@ const BookingModal = ({
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
           <div>
             <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "#111827" }}>Book {provider.full_name}</h3>
-            <p style={{ margin: "3px 0 0", fontSize: 12, color: "#9CA3AF" }}>{provider.service_name || provider.service_category} · ₹{provider.base_price_per_hour}/hr</p>
+            <p style={{ margin: "3px 0 0", fontSize: 12, color: "#9CA3AF" }}>
+              {provider.service_name || provider.service_category} · ₹{provider.base_price_per_hour}/hr
+            </p>
           </div>
           <button onClick={onClose} style={{ background: "#F3F4F6", border: "none", borderRadius: "50%", width: 32, height: 32, cursor: "pointer", fontSize: 16 }}>✕</button>
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {/* Location */}
           <div>
             <label style={{ fontSize: 12, color: "#6B7280", display: "block", marginBottom: 5 }}>Location *</label>
-            <input value={form.location} onChange={e => setForm(f => ({ ...f, location: e.target.value }))} placeholder="Full address" style={inp} />
+            <input
+              value={form.location}
+              onChange={e => setForm(f => ({ ...f, location: e.target.value }))}
+              placeholder="Full address"
+              style={inp}
+            />
           </div>
+
+          {/* Area + Date */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             <div>
               <label style={{ fontSize: 12, color: "#6B7280", display: "block", marginBottom: 5 }}>Area</label>
-              <input value={form.area} onChange={e => setForm(f => ({ ...f, area: e.target.value }))} placeholder="e.g. Bandra" style={inp} />
+              <input
+                value={form.area}
+                onChange={e => setForm(f => ({ ...f, area: e.target.value }))}
+                placeholder="e.g. Bandra"
+                style={inp}
+              />
             </div>
             <div>
               <label style={{ fontSize: 12, color: "#6B7280", display: "block", marginBottom: 5 }}>Date *</label>
-              <input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} style={inp} min={new Date().toISOString().split("T")[0]} />
+              <input
+                type="date"
+                value={form.date}
+                onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
+                style={inp}
+                min={new Date().toISOString().split("T")[0]}
+              />
             </div>
+          </div>
+
+          {/* Start + End Time — drive the price calculation */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             <div>
               <label style={{ fontSize: 12, color: "#6B7280", display: "block", marginBottom: 5 }}>Start Time</label>
-              <input value={form.start} onChange={e => setForm(f => ({ ...f, start: e.target.value }))} placeholder="09:00" style={inp} />
+              <input
+                type="time"
+                value={form.start}
+                onChange={e => setForm(f => ({ ...f, start: e.target.value }))}
+                style={timeInp}
+              />
             </div>
             <div>
               <label style={{ fontSize: 12, color: "#6B7280", display: "block", marginBottom: 5 }}>End Time</label>
-              <input value={form.end} onChange={e => setForm(f => ({ ...f, end: e.target.value }))} placeholder="11:00" style={inp} />
+              <input
+                type="time"
+                value={form.end}
+                onChange={e => setForm(f => ({ ...f, end: e.target.value }))}
+                style={{
+                  ...timeInp,
+                  borderColor: hours <= 0 && form.end ? "#FECACA" : "#E5E7EB",
+                }}
+              />
             </div>
           </div>
+
+          {/* Live duration hint */}
+          {hours > 0 && (
+            <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#6B7280", background: "#F9FAFB", borderRadius: 8, padding: "7px 12px" }}>
+              <span>⏱</span>
+              <span>Duration: <strong style={{ color: "#111827" }}>{formatHours(hours)}</strong></span>
+              <span style={{ marginLeft: "auto", color: "#F97316", fontWeight: 700 }}>
+                ₹{provider.base_price_per_hour} × {hours} hr{hours !== 1 ? "s" : ""}
+              </span>
+            </div>
+          )}
+          {hours <= 0 && form.start && form.end && (
+            <div style={{ fontSize: 12, color: "#DC2626", background: "#FEF2F2", borderRadius: 8, padding: "7px 12px" }}>
+              ⚠ End time must be after start time
+            </div>
+          )}
+
+          {/* Description */}
           <div>
             <label style={{ fontSize: 12, color: "#6B7280", display: "block", marginBottom: 5 }}>Description (optional)</label>
-            <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={3}
+            <textarea
+              value={form.description}
+              onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+              rows={3}
               placeholder="Describe what you need..."
-              style={{ ...inp, resize: "none" as const }} />
+              style={{ ...inp, resize: "none" as const }}
+            />
           </div>
         </div>
 
-        <div style={{ background: "#FFF7ED", borderRadius: 12, padding: "12px 14px", margin: "14px 0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span style={{ fontSize: 13, color: "#6B7280" }}>Estimated Total (2 hrs)</span>
-          <span style={{ fontSize: 18, fontWeight: 700, color: "#F97316" }}>₹{price}</span>
+        {/* ── Estimated Total — updates live as start/end change ── */}
+        <div style={{
+          background: hours > 0 ? "#FFF7ED" : "#F9FAFB",
+          borderRadius: 12, padding: "12px 14px", margin: "14px 0",
+          display: "flex", justifyContent: "space-between", alignItems: "center",
+          border: `1px solid ${hours > 0 ? "#FED7AA" : "#E5E7EB"}`,
+          transition: "all 0.2s",
+        }}>
+          <div>
+            <div style={{ fontSize: 13, color: "#6B7280" }}>
+              Estimated Total
+            </div>
+            <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 2 }}>
+              {hours > 0
+                ? `₹${provider.base_price_per_hour}/hr × ${formatHours(hours)}`
+                : "Select start & end time to calculate"
+              }
+            </div>
+          </div>
+          <span style={{ fontSize: 22, fontWeight: 800, color: hours > 0 ? "#F97316" : "#9CA3AF" }}>
+            {hours > 0 ? `₹${price.toLocaleString("en-IN")}` : "—"}
+          </span>
         </div>
 
-        {error && <p style={{ color: "#DC2626", fontSize: 13, marginBottom: 10, background: "#FEF2F2", padding: "8px 12px", borderRadius: 8 }}>⚠ {error}</p>}
+        {error && (
+          <p style={{ color: "#DC2626", fontSize: 13, marginBottom: 10, background: "#FEF2F2", padding: "8px 12px", borderRadius: 8 }}>
+            ⚠ {error}
+          </p>
+        )}
 
-        <button onClick={submit} disabled={saving}
-          style={{ width: "100%", background: saving ? "#9CA3AF" : "#F97316", color: "#fff", fontWeight: 700, fontSize: 15, padding: "13px 0", borderRadius: 14, border: "none", cursor: saving ? "not-allowed" : "pointer" }}>
-          {saving ? "Submitting..." : "📅 Confirm Booking"}
+        <button
+          onClick={submit}
+          disabled={saving || hours <= 0}
+          style={{
+            width: "100%",
+            background: saving || hours <= 0 ? "#9CA3AF" : "#F97316",
+            color: "#fff", fontWeight: 700, fontSize: 15, padding: "13px 0",
+            borderRadius: 14, border: "none",
+            cursor: saving || hours <= 0 ? "not-allowed" : "pointer",
+          }}
+        >
+          {saving
+            ? "Submitting..."
+            : hours > 0
+              ? `📅 Confirm Booking · ₹${price.toLocaleString("en-IN")}`
+              : "📅 Confirm Booking"
+          }
         </button>
       </div>
     </div>
@@ -507,10 +632,10 @@ const MyBookingsPanel = ({
     finally { setDeleting(d => ({ ...d, [id]: false })); }
   };
 
-  const upcoming      = appts.filter(a => ["pending","accepted","ongoing"].includes(a.status));
-  const past          = appts.filter(a => ["completed","rejected","cancelled"].includes(a.status));
-  const pendingReviews= past.filter(a => a.status === "completed" && !reviewedIds.has(a.id) && !a.has_review && a.id !== reviewedApptId);
-  const shown         = tab === "upcoming" ? upcoming : tab === "past" ? past : [];
+  const upcoming       = appts.filter(a => ["pending","accepted","ongoing"].includes(a.status));
+  const past           = appts.filter(a => ["completed","rejected","cancelled"].includes(a.status));
+  const pendingReviews = past.filter(a => a.status === "completed" && !reviewedIds.has(a.id) && !a.has_review && a.id !== reviewedApptId);
+  const shown          = tab === "upcoming" ? upcoming : tab === "past" ? past : [];
 
   const SC: Record<string,string> = { pending:"#F97316", accepted:"#3b82f6", ongoing:"#8b5cf6", completed:"#16a34a", rejected:"#ef4444", cancelled:"#9CA3AF" };
   const fmt = (s: string) => new Date(s).toLocaleDateString("en-IN", { day:"numeric", month:"short", year:"numeric" });
@@ -522,7 +647,6 @@ const MyBookingsPanel = ({
 
         <div style={{ width:40, height:4, background:"#E5E7EB", borderRadius:2, margin:"0 auto 16px" }} />
 
-        {/* Header */}
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:14 }}>
           <div>
             <h3 style={{ margin:0, fontSize:18, fontWeight:700, color:"#111827" }}>My Bookings</h3>
@@ -535,7 +659,6 @@ const MyBookingsPanel = ({
           <button onClick={onClose} style={{ background:"#F3F4F6", border:"none", borderRadius:8, width:32, height:32, cursor:"pointer", fontSize:16 }}>✕</button>
         </div>
 
-        {/* Review nudge banner — shown on upcoming tab when there are pending reviews */}
         {tab === "upcoming" && pendingReviews.length > 0 && (
           <div onClick={() => setTab("past")}
             style={{ background:"#FFF7ED", border:"1px solid #FED7AA", borderRadius:12, padding:"12px 14px", marginBottom:14, cursor:"pointer", display:"flex", alignItems:"center", gap:10 }}>
@@ -550,7 +673,6 @@ const MyBookingsPanel = ({
           </div>
         )}
 
-        {/* Tabs */}
         <div style={{ display:"flex", gap:4, marginBottom:16, background:"#F9FAFB", borderRadius:12, padding:4 }}>
           {(["upcoming","past","reviews"] as const).map(t => (
             <button key={t} onClick={() => setTab(t)} style={{
@@ -575,7 +697,6 @@ const MyBookingsPanel = ({
           ))}
         </div>
 
-        {/* ── Reviews Tab ── */}
         {tab === "reviews" && (
           loadingRev ? <Spinner /> : myReviews.length === 0 ? (
             <div style={{ textAlign:"center", padding:"32px 16px" }}>
@@ -615,7 +736,6 @@ const MyBookingsPanel = ({
           )
         )}
 
-        {/* ── Upcoming / Past Tabs ── */}
         {tab !== "reviews" && (loading ? <Spinner /> : shown.length === 0 ? (
           <p style={{ textAlign:"center", color:"#9CA3AF", padding:32, fontSize:14 }}>
             {tab==="upcoming" ? "No upcoming bookings. Book a service to get started!" : "No past bookings yet."}
@@ -641,26 +761,19 @@ const MyBookingsPanel = ({
               </div>
 
               <div style={{ display:"flex", gap:8, marginTop:12 }}>
-                {/* Cancel pending */}
                 {a.status==="pending" && (
                   <button onClick={() => cancelAppt(a.id)} disabled={deleting[a.id]}
                     style={{ flex:1, background:"#FEF2F2", color:"#ef4444", border:"1px solid #FECACA", fontSize:12, fontWeight:700, padding:"8px 0", borderRadius:10, cursor:deleting[a.id]?"not-allowed":"pointer", opacity:deleting[a.id]?0.6:1 }}>
                     {deleting[a.id]?"Cancelling...":"✕ Cancel"}
                   </button>
                 )}
-                {/* Accepted — info banner + chat */}
                 {a.status==="accepted" && (
                   <div style={{ flex:1, display:"flex", flexDirection:"column", gap:6 }}>
                     <div style={{ background:"#EFF6FF", border:"1px solid #BFDBFE", borderRadius:10, padding:"8px 12px", fontSize:12, color:"#1D4ED8", fontWeight:500 }}>
                       ✅ Provider confirmed! Work will begin soon — you can pay once they start.
                     </div>
-                    {/* <button onClick={() => { onClose(); onOpenChat(a.id); }}
-                      style={{ background:"#F97316", color:"#fff", border:"none", fontSize:12, fontWeight:700, padding:"8px 0", borderRadius:10, cursor:"pointer" }}>
-                      💬 Chat with Provider
-                    </button> */}
                   </div>
                 )}
-                {/* Ongoing — Pay Now + chat (work has started) */}
                 {a.status==="ongoing" && (
                   <div style={{ flex:1, display:"flex", flexDirection:"column", gap:6 }}>
                     {!paidApptIds.has(a.id) && (
@@ -674,26 +787,19 @@ const MyBookingsPanel = ({
                         ✅ Payment done — provider completing your job
                       </div>
                     )}
-                    {/* <button onClick={() => { onClose(); onOpenChat(a.id); }}
-                      style={{ background:"#F9FAFB", color:"#374151", border:"1px solid #E5E7EB", fontSize:12, fontWeight:700, padding:"8px 0", borderRadius:10, cursor:"pointer" }}>
-                      💬 Chat with Provider
-                    </button> */}
                   </div>
                 )}
-                {/* Leave Review — only if completed and not yet reviewed */}
                 {a.status==="completed" && !reviewed && (
                   <button onClick={() => onLeaveReview({ ...a, _onReviewed: () => markReviewed(a.id) })}
                     style={{ flex:1, background:"#F97316", color:"#fff", border:"none", fontSize:12, fontWeight:700, padding:"8px 0", borderRadius:10, cursor:"pointer" }}>
                     ⭐ Leave Review
                   </button>
                 )}
-                {/* Already reviewed indicator */}
                 {a.status==="completed" && reviewed && (
                   <div style={{ flex:1, background:"#F0FDF4", color:"#16a34a", border:"1px solid #BBF7D0", fontSize:12, fontWeight:600, padding:"8px 0", borderRadius:10, textAlign:"center" }}>
                     ✅ Review Submitted
                   </div>
                 )}
-                {/* Book Again */}
                 {(a.status==="completed"||a.status==="rejected") && (
                   <button onClick={() => onBookAgain(a.provider_id)}
                     style={{ flex:1, background:reviewed?"#F97316":"#F9FAFB", color:reviewed?"#fff":"#374151", border:reviewed?"none":"1px solid #E5E7EB", fontSize:12, fontWeight:700, padding:"8px 0", borderRadius:10, cursor:"pointer" }}>
@@ -734,7 +840,7 @@ const LeaveReviewModal = ({
         const d = await res.json().catch(() => ({})) as { error?: string };
         throw new Error(d.error || "Failed to submit review");
       }
-      appointment._onReviewed?.(); // mark as reviewed in MyBookingsPanel immediately
+      appointment._onReviewed?.();
       onClose(true);
     } catch (e) {
       setError((e as Error).message);
@@ -819,9 +925,7 @@ const MyReviewsPanel = ({ token, onClose, onOpenBookings }: { token: string; onC
   );
 };
 
-
 // ─── Payment Modal — Razorpay integration ────────────────────────────────────
-// Loads Razorpay JS SDK dynamically, creates order, opens checkout, verifies
 interface PaymentModalProps {
   appointmentId: number; serviceName: string; amountRupees: number;
   providerName: string; token: string;
@@ -863,7 +967,6 @@ const PaymentModal = ({ appointmentId, serviceName, amountRupees, providerName, 
       const loaded = await loadRazorpayScript();
       if (!loaded) throw new Error("Could not load Razorpay — check your internet connection");
 
-      // POST /payments/create-order
       const res  = await fetch(`${BASE}/payments/create-order`, {
         method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ appointmentId }),
@@ -936,7 +1039,7 @@ const PaymentModal = ({ appointmentId, serviceName, amountRupees, providerName, 
   );
 
   return (
-    <div style={{ ...overlay, ...(step==="idle"?{}:{}) }} onClick={step==="idle"?onClose:undefined}>
+    <div style={{ ...overlay }} onClick={step==="idle"?onClose:undefined}>
       <div onClick={e => e.stopPropagation()} style={{ background:"#fff", borderRadius:24, padding:28, width:440, maxWidth:"92vw", boxShadow:"0 32px 80px rgba(0,0,0,0.2)" }}>
         <div style={{ width:40, height:4, background:"#E5E7EB", borderRadius:2, margin:"0 auto 20px" }} />
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:20 }}>
@@ -947,14 +1050,12 @@ const PaymentModal = ({ appointmentId, serviceName, amountRupees, providerName, 
           {step==="idle" && <button onClick={onClose} style={{ background:"#F3F4F6", border:"none", borderRadius:"50%", width:32, height:32, cursor:"pointer", fontSize:16 }}>✕</button>}
         </div>
 
-        {/* Steps */}
         <div style={{ display:"flex", flexDirection:"column", gap:12, padding:14, background:"#F9FAFB", borderRadius:12, marginBottom:20 }}>
           <PaymentStep n={1} label="Create payment order"  active={step==="creating"}  done={stepN>1} />
           <PaymentStep n={2} label="Complete checkout"      active={step==="checkout"}  done={stepN>2} />
           <PaymentStep n={3} label="Verify & confirm"       active={step==="verifying"} done={stepN>3} />
         </div>
 
-        {/* Amount */}
         <div style={{ background:"#FFF7ED", borderRadius:12, padding:"14px 16px", marginBottom:18, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
           <div>
             <div style={{ fontSize:11, color:"#9CA3AF", fontWeight:600, textTransform:"uppercase" as const, marginBottom:2 }}>Total Due</div>
@@ -963,7 +1064,6 @@ const PaymentModal = ({ appointmentId, serviceName, amountRupees, providerName, 
           <div style={{ fontSize:26, fontWeight:800, color:"#F97316" }}>₹{amountRupees.toLocaleString("en-IN")}</div>
         </div>
 
-        {/* Payment method chips */}
         {step==="idle" && (
           <div style={{ marginBottom:20 }}>
             <div style={{ fontSize:11, color:"#9CA3AF", fontWeight:600, marginBottom:8, textTransform:"uppercase" as const }}>Accepted Methods</div>
@@ -975,7 +1075,6 @@ const PaymentModal = ({ appointmentId, serviceName, amountRupees, providerName, 
           </div>
         )}
 
-        {/* Processing spinner */}
         {(step==="creating"||step==="verifying") && (
           <div style={{ textAlign:"center", padding:"14px 0", marginBottom:14 }}>
             <div style={{ width:34, height:34, border:"3px solid #F3F4F6", borderTop:"3px solid #F97316", borderRadius:"50%", animation:"spin 0.8s linear infinite", margin:"0 auto 10px" }} />
@@ -1020,11 +1119,10 @@ export function SmartServeLanding({
   const [mobileMenu,   setMobileMenu]   = useState(false);
   const [citiesList,   setCitiesList]   = useState<string[]>([]);
 
-  // ── Customer modal state ─────────────────────────────────────────────────
   const [viewingProviderId, setViewingProviderId] = useState<number | null>(null);
   const [bookingProvider,   setBookingProvider]   = useState<ApiProviderDetail | null>(null);
   const [paymentAppt,       setPaymentAppt]       = useState<{ id: number; serviceName: string; amount: number; providerName: string } | null>(null);
-  const [paidApptIds,       setPaidApptIds]        = useState<Set<number>>(new Set());
+  const [paidApptIds,       setPaidApptIds]       = useState<Set<number>>(new Set());
   const [showBookings,      setShowBookings]      = useState(false);
   const [reviewAppt,        setReviewAppt]        = useState<CustomerAppointment | null>(null);
   const [lastReviewedId,    setLastReviewedId]    = useState<number | null>(null);
@@ -1033,15 +1131,11 @@ export function SmartServeLanding({
 
   const showToastMsg = (msg: string, ok: boolean) => { setToast({ msg, ok }); setTimeout(() => setToast(null), 3500); };
 
-  // Opens BookingModal: fetch GET /providers/:id first for full detail
   const handleBookProvider = (providerId: number) => {
-    // Try to fetch full provider detail from API
     fetch(`${BASE}/providers/${providerId}`)
       .then(r => r.ok ? r.json() : Promise.reject(new Error("not found")))
       .then((p: ApiProviderDetail) => setBookingProvider(p))
       .catch(() => {
-        // API failed or provider not found — build a minimal detail object
-        // from the already-loaded providers list so booking still works
         const fallback = providers.find(p => p.id === providerId);
         if (fallback) {
           setBookingProvider({
@@ -1069,8 +1163,6 @@ export function SmartServeLanding({
       });
   };
 
-  // GET /providers
-  // Fetch all providers once on mount to extract unique cities
   useEffect(() => {
     fetch(`${BASE}/providers?limit=100`)
       .then(r => r.ok ? r.json() : [])
@@ -1081,9 +1173,8 @@ export function SmartServeLanding({
           )).sort();
           if (unique.length > 0) {
             setCitiesList(unique);
-            setCity(unique[0]); // default to first city
+            setCity(unique[0]);
           }
-          // testimonials from first provider with reviews
           const first = data.find(p => p.total_reviews > 0);
           if (first) {
             fetch(`${BASE}/reviews/provider/${first.id}?limit=3`)
@@ -1101,7 +1192,6 @@ export function SmartServeLanding({
       }).catch(() => {});
   }, []);
 
-  // Re-fetch providers whenever selected city changes
   useEffect(() => {
     if (!city) return;
     setLoadingProv(true);
@@ -1112,7 +1202,7 @@ export function SmartServeLanding({
         if (Array.isArray(data) && data.length > 0) {
           setProviders(data.map((p, i) => toProvider(p, i)));
         } else {
-          setProviders([]); // no providers in this city
+          setProviders([]);
         }
       })
       .catch(() => setProviders([]))
@@ -1132,7 +1222,6 @@ export function SmartServeLanding({
       <style>{GLOBAL_CSS}</style>
 
       {/* ── Modals ── */}
-      {/* GET /providers/:id */}
       {viewingProviderId !== null && (
         <ProviderProfileModal
           providerId={viewingProviderId}
@@ -1141,7 +1230,6 @@ export function SmartServeLanding({
         />
       )}
 
-      {/* POST /appointments */}
       {bookingProvider !== null && (
         <BookingModal
           provider={bookingProvider}
@@ -1154,7 +1242,6 @@ export function SmartServeLanding({
         />
       )}
 
-      {/* Payment Modal — POST /payments/create-order + POST /payments/verify */}
       {paymentAppt && accessToken && (
         <PaymentModal
           appointmentId={paymentAppt.id}
@@ -1171,7 +1258,6 @@ export function SmartServeLanding({
         />
       )}
 
-      {/* GET /appointments + DELETE /appointments/:id */}
       {showBookings && accessToken && (
         <MyBookingsPanel
           token={accessToken}
@@ -1193,7 +1279,6 @@ export function SmartServeLanding({
         />
       )}
 
-      {/* POST /reviews */}
       {reviewAppt && accessToken && (
         <LeaveReviewModal
           appointment={reviewAppt}
@@ -1208,7 +1293,6 @@ export function SmartServeLanding({
         />
       )}
 
-      {/* GET /reviews/my */}
       {showMyReviews && accessToken && (
         <MyReviewsPanel
           token={accessToken}
@@ -1253,8 +1337,6 @@ export function SmartServeLanding({
       {/* ── Navbar ── */}
       <nav style={{ background: "#1A1A2E", height: 56, display: "flex", alignItems: "center", padding: isMobile ? "0 16px" : "0 40px", position: "sticky", top: 0, zIndex: 100, boxShadow: "0 2px 12px rgba(0,0,0,0.15)" }}>
         <span style={{ fontWeight: 800, fontSize: 20, color: "#F97316", letterSpacing: "-0.5px", marginRight: "auto" }}>SmartServe</span>
-
-        {/* Desktop nav links */}
         <div className="ss-nav-links" style={{ marginRight: 24 }}>
           {["Home","Services","Cities","For Partners","Contact"].map(item => (
             <a key={item} href="#" style={{ color: "#D1D5DB", fontSize: 14, fontWeight: 500, textDecoration: "none" }}
@@ -1263,8 +1345,6 @@ export function SmartServeLanding({
             >{item}</a>
           ))}
         </div>
-
-        {/* Desktop action buttons */}
         <div className="ss-nav-actions">
           {isLoggedIn ? (
             <>
@@ -1277,10 +1357,6 @@ export function SmartServeLanding({
                 style={{ background: "rgba(255,255,255,0.08)", color: "#D1D5DB", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 10, padding: "7px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
                 ⭐ Reviews
               </button>
-              {/* <button onClick={onOpenChat ? () => onOpenChat(undefined) : undefined}
-                style={{ background: "rgba(255,255,255,0.08)", color: "#D1D5DB", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 10, padding: "7px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-                💬 Messages
-              </button> */}
               <button onClick={onLogout}
                 style={{ background: "rgba(239,68,68,0.15)", color: "#ef4444", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 10, padding: "7px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
                 Logout
@@ -1293,8 +1369,6 @@ export function SmartServeLanding({
             </>
           )}
         </div>
-
-        {/* Mobile hamburger */}
         <button className="ss-mobile-menu-btn" onClick={() => setMobileMenu(true)}
           style={{ display: "none", background: "rgba(255,255,255,0.1)", border: "none", borderRadius: 8, width: 38, height: 38, alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#fff", fontSize: 20 }}>
           ☰
@@ -1326,7 +1400,6 @@ export function SmartServeLanding({
               </div>
               {isMobile && (
                 <>
-                  {/* City selector row on mobile */}
                   <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 8, background: "#F9FAFB", border: "1px solid #E5E7EB", borderRadius: 12, padding: "10px 14px" }}>
                     <span style={{ fontSize: 16 }}>📍</span>
                     <select value={city} onChange={e => setCity(e.target.value)}
@@ -1431,7 +1504,7 @@ export function SmartServeLanding({
         </div>
       </section>
 
-      {/* ── Provider Cards — GET /providers ── */}
+      {/* ── Provider Cards ── */}
       <section style={{ padding: isMobile ? "24px 0" : "60px 0", background: "linear-gradient(180deg, #FFF7ED 0%, #ffffff 100%)" }}>
         <div className="ss-section">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: isMobile ? "flex-start" : "flex-end", flexDirection: isMobile ? "column" : "row", gap: 12, marginBottom: 20 }}>
@@ -1442,7 +1515,6 @@ export function SmartServeLanding({
               </h2>
               <p style={{ fontSize: 13, color: "#6B7280", marginTop: 6 }}>Hand-picked, background-verified experts ready to serve you</p>
             </div>
-            {/* Desktop city picker in provider section */}
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               {!isMobile && citiesList.length > 1 && (
                 <div style={{ display: "flex", alignItems: "center", gap: 6, background: "#fff", border: "1px solid #E5E7EB", borderRadius: 10, padding: "7px 12px" }}>
@@ -1456,9 +1528,8 @@ export function SmartServeLanding({
             </div>
           </div>
 
-          {/* City pills — quick switch */}
           {citiesList.length > 1 && (
-            <div style={{ display: "flex", gap: 8, marginBottom: 16, overflowX: "auto", paddingBottom: 4, WebkitOverflowScrolling: "touch" as unknown as undefined }}>
+            <div style={{ display: "flex", gap: 8, marginBottom: 16, overflowX: "auto", paddingBottom: 4 }}>
               {citiesList.map(c => (
                 <button key={c} onClick={() => setCity(c)} style={{
                   padding: "6px 16px", borderRadius: 99, fontSize: 13, fontWeight: 600,
@@ -1471,8 +1542,7 @@ export function SmartServeLanding({
             </div>
           )}
 
-          {/* Filter chips */}
-          <div style={{ display: "flex", gap: 8, marginBottom: 24, overflowX: "auto", paddingBottom: 4, WebkitOverflowScrolling: "touch" as unknown as undefined }}>
+          <div style={{ display: "flex", gap: 8, marginBottom: 24, overflowX: "auto", paddingBottom: 4 }}>
             {filters.map(f => (
               <button key={f} onClick={() => setActiveFilter(f)} style={{
                 padding: "7px 16px", borderRadius: 99, fontSize: 13, fontWeight: 600, cursor: "pointer", flexShrink: 0,
@@ -1528,7 +1598,7 @@ export function SmartServeLanding({
         </div>
       </section>
 
-      {/* ── Testimonials — GET /reviews/provider/:id ── */}
+      {/* ── Testimonials ── */}
       <section style={{ padding: isMobile ? "24px 0" : "60px 0", background: "#FAFAFA" }}>
         <div className="ss-section">
           <h2 style={{ fontSize: isMobile ? 16 : 20, fontWeight: 700, color: "#111827", marginBottom: 20 }}>Trusted by 1M+ Customers</h2>
