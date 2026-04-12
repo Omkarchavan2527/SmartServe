@@ -1,290 +1,424 @@
-import { useState, useEffect, useRef } from "react";
-import { api } from "./Dashboardtypes";
-import type { Appointment } from "./Dashboardtypes";
-import { Avatar, StatusBadge, Spinner, Toast, useIsMobile } from "./Dashboardshared";
+import { useState, useRef, useEffect } from "react";
 
-// ─── MapModal — Leaflet + OpenStreetMap (no API key needed) ──────────────────
-// Uses:
-//   • Leaflet.js loaded via CDN script tag
-//   • Nominatim (OpenStreetMap) for geocoding customer address → lat/lng
-//   • navigator.geolocation for provider's current position
-//   • Drawn as a full-screen overlay with animated route line between both pins
-declare global {
-  interface Window {
-    L: any; // Leaflet global from CDN
-  }
-}
+declare global { interface Window { L: any; } }
 
 interface LatLng { lat: number; lng: number; }
 
-// ── Load Leaflet CSS + JS from CDN (idempotent) ───────────────────────────────
+interface OsrmRoute {
+  distance: number;
+  duration: number;
+  geometry: { coordinates: [number, number][] };
+  legs: { steps: { maneuver: { instruction?: string }; distance: number; duration: number }[] }[];
+}
+
+// ── Load Leaflet CSS + JS from CDN ────────────────────────────────────────────
 function loadLeaflet(): Promise<void> {
   return new Promise((resolve, reject) => {
     if (window.L) { resolve(); return; }
-
-    // CSS
     if (!document.getElementById("leaflet-css")) {
-      const link  = document.createElement("link");
-      link.id     = "leaflet-css";
-      link.rel    = "stylesheet";
-      link.href   = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+      const link = document.createElement("link");
+      link.id = "leaflet-css"; link.rel = "stylesheet";
+      link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
       document.head.appendChild(link);
     }
-
-    // JS
     if (!document.getElementById("leaflet-js")) {
-      const script    = document.createElement("script");
-      script.id       = "leaflet-js";
-      script.src      = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
-      script.onload   = () => resolve();
-      script.onerror  = () => reject(new Error("Failed to load Leaflet"));
-      document.body.appendChild(script);
+      const s = document.createElement("script");
+      s.id = "leaflet-js";
+      s.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+      s.onload  = () => resolve();
+      s.onerror = () => reject(new Error("Failed to load Leaflet"));
+      document.body.appendChild(s);
     } else {
-      // Script tag exists but may still be loading
-      const existing = document.getElementById("leaflet-js") as HTMLScriptElement;
-      existing.onload = () => resolve();
+      const wait = setInterval(() => { if (window.L) { clearInterval(wait); resolve(); } }, 50);
     }
   });
 }
 
-// ── Geocode address via Nominatim ─────────────────────────────────────────────
+// ── Geocode via Nominatim ─────────────────────────────────────────────────────
 async function geocode(address: string): Promise<LatLng | null> {
   try {
-    const q   = encodeURIComponent(address);
-    const url = `https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=1`;
-    const res = await fetch(url, { headers: { "Accept-Language": "en" } });
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1`,
+      { headers: { "Accept-Language": "en" } }
+    );
     const data = await res.json() as { lat: string; lon: string }[];
     if (!data.length) return null;
     return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
   } catch { return null; }
 }
 
-// ── Haversine distance (km) ───────────────────────────────────────────────────
-function haversineKm(a: LatLng, b: LatLng): number {
-  const R  = 6371;
-  const dLat = (b.lat - a.lat) * Math.PI / 180;
-  const dLng = (b.lng - a.lng) * Math.PI / 180;
-  const h = Math.sin(dLat/2)**2 + Math.cos(a.lat*Math.PI/180) * Math.cos(b.lat*Math.PI/180) * Math.sin(dLng/2)**2;
-  return R * 2 * Math.asin(Math.sqrt(h));
+// ── OSRM real road route ──────────────────────────────────────────────────────
+async function fetchOsrmRoute(from: LatLng, to: LatLng): Promise<OsrmRoute | null> {
+  try {
+    const url = `https://router.project-osrm.org/route/v1/driving/` +
+      `${from.lng},${from.lat};${to.lng},${to.lat}` +
+      `?overview=full&geometries=geojson&steps=true`;
+    const res  = await fetch(url);
+    const data = await res.json() as { code: string; routes: OsrmRoute[] };
+    if (data.code !== "Ok" || !data.routes?.length) return null;
+    return data.routes[0];
+  } catch { return null; }
+}
+
+function fmtDist(metres: number): string {
+  return metres < 1000 ? `${Math.round(metres)} m` : `${(metres / 1000).toFixed(1)} km`;
+}
+function fmtTime(seconds: number): string {
+  const m = Math.round(seconds / 60);
+  return m < 60 ? `${m} min` : `${Math.floor(m / 60)}h ${m % 60}m`;
+}
+
+// ── Provider pin icon HTML (extracted so it's reusable) ───────────────────────
+function providerIconHtml(): string {
+  return `<div style="position:relative;width:44px;height:44px">
+    <div style="width:44px;height:44px;background:#F97316;border:3px solid #fff;
+      border-radius:50% 50% 50% 0;transform:rotate(-45deg);
+      box-shadow:0 3px 10px rgba(249,115,22,0.5);">
+      <div style="transform:rotate(45deg);display:flex;align-items:center;
+        justify-content:center;width:100%;height:100%;font-size:20px;">🧑‍🔧</div>
+    </div>
+  </div>`;
 }
 
 // ── MapModal component ────────────────────────────────────────────────────────
-interface MapModalProps {
-  appointment: Appointment;
-  onClose: () => void;
-}
+interface MapModalProps { appointment: import("./Dashboardtypes").Appointment; onClose: () => void; }
 
 export const MapModal = ({ appointment, onClose }: MapModalProps) => {
-  const mapRef     = useRef<HTMLDivElement>(null);
-  const leafletMap = useRef<any>(null);
+  const mapRef        = useRef<HTMLDivElement>(null);
+  const leafletMap    = useRef<any>(null);
+  const provMarkerRef = useRef<any>(null);  // ref to move marker on GPS updates
+  const watchIdRef    = useRef<number | null>(null);
 
-  const [status,    setStatus]    = useState<"loading"|"locating"|"geocoding"|"ready"|"error">("loading");
-  const [errorMsg,  setErrorMsg]  = useState("");
+  type Status = "loading" | "locating" | "geocoding" | "routing" | "ready" | "error";
+  const [status,     setStatus]     = useState<Status>("loading");
+  const [errorMsg,   setErrorMsg]   = useState("");
   const [providerLL, setProviderLL] = useState<LatLng | null>(null);
   const [customerLL, setCustomerLL] = useState<LatLng | null>(null);
-  const [distanceKm, setDistanceKm] = useState<number | null>(null);
-  const [travelMin,  setTravelMin]  = useState<number | null>(null);
+  const [route,      setRoute]      = useState<OsrmRoute | null>(null);
+  const [steps,      setSteps]      = useState<string[]>([]);
+  const [showSteps,  setShowSteps]  = useState(false);
+  const [liveLL,     setLiveLL]     = useState<LatLng | null>(null);
 
-  // ── Step 1: Load Leaflet → Step 2: Get provider GPS → Step 3: Geocode address
+  // ── Init: load Leaflet → GPS → geocode → OSRM ────────────────────────────
   useEffect(() => {
     let cancelled = false;
 
     async function init() {
       try {
-        // Load Leaflet
         setStatus("loading");
         await loadLeaflet();
         if (cancelled) return;
 
-        // Get provider current location
+        // ── Get current position using the same simple pattern as the old
+        //    working code — getCurrentPosition gives the true current fix ──
         setStatus("locating");
-        const provPos = await new Promise<GeolocationPosition>((res, rej) => {
-          if (!navigator.geolocation) return rej(new Error("Geolocation not supported by your browser"));
-          navigator.geolocation.getCurrentPosition(res, rej, { timeout: 10000, enableHighAccuracy: true });
+        const pos = await new Promise<GeolocationPosition>((res, rej) => {
+          if (!navigator.geolocation) return rej(new Error("Geolocation not supported"));
+          navigator.geolocation.getCurrentPosition(res, rej, {
+            timeout: 12000,
+            enableHighAccuracy: true,
+          });
         });
         if (cancelled) return;
 
-        const pLL: LatLng = { lat: provPos.coords.latitude, lng: provPos.coords.longitude };
+        const pLL: LatLng = { lat: pos.coords.latitude, lng: pos.coords.longitude };
         setProviderLL(pLL);
+        setLiveLL(pLL);
 
-        // Geocode customer address
+        // ── Start live watch AFTER initial fix so we have a baseline ────────
+        watchIdRef.current = navigator.geolocation.watchPosition(
+          p => {
+            if (!cancelled) setLiveLL({ lat: p.coords.latitude, lng: p.coords.longitude });
+          },
+          () => { /* silent — watch failure doesn't break map */ },
+          { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
+        );
+
+        // ── Geocode customer address ─────────────────────────────────────────
         setStatus("geocoding");
         const address = [appointment.location, appointment.area].filter(Boolean).join(", ");
         const cLL = await geocode(address);
         if (cancelled) return;
-
-        if (!cLL) throw new Error(`Could not find location: "${address}". Try editing the address.`);
+        if (!cLL) throw new Error(`Could not locate: "${address}"\nTry a more specific address.`);
         setCustomerLL(cLL);
 
-        const km = haversineKm(pLL, cLL);
-        setDistanceKm(Math.round(km * 10) / 10);
-        setTravelMin(Math.round((km / 25) * 60)); // ~25 km/h avg city speed
+        // ── OSRM road route (skip if > 150 km straight-line) ────────────────
+        setStatus("routing");
+        const osrmRoute = await fetchOsrmRoute(pLL, cLL);
+        if (cancelled) return;
+
+        if (osrmRoute && osrmRoute.distance > 150000) {
+          // Over 150 km — show pins only, no route drawn
+          setRoute(null);
+          setSteps([]);
+        } else {
+          setRoute(osrmRoute);
+          if (osrmRoute) {
+            const allSteps = osrmRoute.legs.flatMap(leg =>
+              leg.steps.map(s => s.maneuver?.instruction || "").filter(Boolean)
+            );
+            setSteps(allSteps.slice(0, 12));
+          }
+        }
 
         setStatus("ready");
       } catch (e) {
-        if (!cancelled) {
-          setErrorMsg((e as Error).message || "Could not load map");
-          setStatus("error");
-        }
+        if (!cancelled) { setErrorMsg((e as Error).message); setStatus("error"); }
       }
     }
 
     init();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+        watchIdRef.current = null;
+      }
+    };
   }, [appointment]);
 
-  // ── Step 4: Render map once status = ready ────────────────────────────────
+  // ── Render map once status = ready ───────────────────────────────────────
+  // Provider marker is placed HERE at providerLL (the real getCurrentPosition
+  // fix) and stored in provMarkerRef. The liveLL effect below then moves it
+  // on every watchPosition update — it never recreates it.
   useEffect(() => {
     if (status !== "ready" || !mapRef.current || !providerLL || !customerLL) return;
     if (leafletMap.current) { leafletMap.current.remove(); leafletMap.current = null; }
+    provMarkerRef.current = null; // reset so stale ref can't be moved before new map is ready
 
-    const L   = window.L;
-    const mid = { lat: (providerLL.lat + customerLL.lat) / 2, lng: (providerLL.lng + customerLL.lng) / 2 };
-    const map = L.map(mapRef.current, { zoomControl: true }).setView([mid.lat, mid.lng], 12);
+    const L = window.L;
+    const mid = {
+      lat: (providerLL.lat + customerLL.lat) / 2,
+      lng: (providerLL.lng + customerLL.lng) / 2,
+    };
+    const map = L.map(mapRef.current, { zoomControl: true }).setView([mid.lat, mid.lng], 13);
     leafletMap.current = map;
 
-    // OpenStreetMap tiles (free, no key)
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: "© OpenStreetMap contributors",
+      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
       maxZoom: 19,
     }).addTo(map);
 
-    // Custom provider pin (orange)
-    const provIcon = L.divIcon({
-      className: "",
-      html: `<div style="width:36px;height:36px;background:#F97316;border:3px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 2px 8px rgba(0,0,0,0.3)"><div style="transform:rotate(45deg);display:flex;align-items:center;justify-content:center;width:100%;height:100%;font-size:16px">🧑‍🔧</div></div>`,
-      iconSize: [36, 36], iconAnchor: [18, 36],
-    });
+    // ── Road route or fallback dashed line ───────────────────────────────
+    if (route?.geometry?.coordinates?.length) {
+      const latlngs = route.geometry.coordinates.map(([lng, lat]) => [lat, lng] as [number, number]);
+      // Casing line behind
+      L.polyline(latlngs, { color: "#C2410C", weight: 7, opacity: 0.4, lineJoin: "round" as const }).addTo(map);
+      // Main line on top
+      L.polyline(latlngs, { color: "#F97316", weight: 5, opacity: 0.9, lineJoin: "round" as const }).addTo(map);
+      map.fitBounds(L.polyline(latlngs).getBounds(), { padding: [40, 40] });
+    } else {
+      L.polyline(
+        [[providerLL.lat, providerLL.lng], [customerLL.lat, customerLL.lng]],
+        { color: "#F97316", weight: 3, dashArray: "8 6", opacity: 0.8 }
+      ).addTo(map);
+      map.fitBounds([
+        [providerLL.lat, providerLL.lng],
+        [customerLL.lat, customerLL.lng],
+      ], { padding: [50, 50] });
+    }
 
-    // Custom customer pin (blue)
-    const custIcon = L.divIcon({
-      className: "",
-      html: `<div style="width:36px;height:36px;background:#3b82f6;border:3px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 2px 8px rgba(0,0,0,0.3)"><div style="transform:rotate(45deg);display:flex;align-items:center;justify-content:center;width:100%;height:100%;font-size:16px">🏠</div></div>`,
-      iconSize: [36, 36], iconAnchor: [18, 36],
-    });
-
-    // Add markers
-    L.marker([providerLL.lat, providerLL.lng], { icon: provIcon })
+    // ── Provider pin — placed at real current GPS position (providerLL) ──
+    const provMarker = L.marker([providerLL.lat, providerLL.lng], {
+      icon: L.divIcon({ className: "", html: providerIconHtml(), iconSize: [44, 44], iconAnchor: [22, 44] }),
+    })
       .addTo(map)
-      .bindPopup("<b>📍 Your Location</b><br>You are here")
+      .bindPopup(`<b>📍 Your Location</b><br><span style='font-size:11px;color:#6B7280'>${providerLL.lat.toFixed(5)}, ${providerLL.lng.toFixed(5)}</span>`)
       .openPopup();
+    provMarkerRef.current = provMarker;
 
-    L.marker([customerLL.lat, customerLL.lng], { icon: custIcon })
-      .addTo(map)
-      .bindPopup(`<b>🏠 Customer Location</b><br>${appointment.location}${appointment.area ? ", " + appointment.area : ""}`);
+    // ── Customer pin ─────────────────────────────────────────────────────
+    L.marker([customerLL.lat, customerLL.lng], {
+      icon: L.divIcon({
+        className: "",
+        html: `<div style="position:relative;width:44px;height:44px">
+          <div style="width:44px;height:44px;background:#3b82f6;border:3px solid #fff;
+            border-radius:50% 50% 50% 0;transform:rotate(-45deg);
+            box-shadow:0 3px 10px rgba(59,130,246,0.5);">
+            <div style="transform:rotate(45deg);display:flex;align-items:center;
+              justify-content:center;width:100%;height:100%;font-size:20px;">🏠</div>
+          </div>
+        </div>`,
+        iconSize: [44, 44], iconAnchor: [22, 44],
+      }),
+    }).addTo(map)
+      .bindPopup(`<b>🏠 Customer</b><br><span style='font-size:12px;color:#6B7280'>${appointment.location}${appointment.area ? ", " + appointment.area : ""}</span>`);
 
-    // Dashed route line between both points
-    L.polyline([[providerLL.lat, providerLL.lng], [customerLL.lat, customerLL.lng]], {
-      color: "#F97316", weight: 3, dashArray: "8 6", opacity: 0.8,
-    }).addTo(map);
+    return () => {
+      if (leafletMap.current) { leafletMap.current.remove(); leafletMap.current = null; }
+      provMarkerRef.current = null;
+    };
+  }, [status, providerLL, customerLL, route, appointment]);
 
-    // Fit both markers in view with padding
-    map.fitBounds([
-      [providerLL.lat, providerLL.lng],
-      [customerLL.lat, customerLL.lng],
-    ], { padding: [50, 50] });
+  // ── Live GPS: only MOVES the marker — never creates it ───────────────────
+  // Creation happens in the map effect above using the real getCurrentPosition
+  // fix. This effect only fires on watchPosition updates that come after.
+  useEffect(() => {
+    if (!liveLL || !leafletMap.current || !provMarkerRef.current) return;
+    provMarkerRef.current.setLatLng([liveLL.lat, liveLL.lng]);
+    provMarkerRef.current.setPopupContent(
+      `<b>📍 Your Live Location</b><br><span style='font-size:11px;color:#6B7280'>${liveLL.lat.toFixed(5)}, ${liveLL.lng.toFixed(5)}</span>`
+    );
+  }, [liveLL]);
 
-    return () => { if (leafletMap.current) { leafletMap.current.remove(); leafletMap.current = null; } };
-  }, [status, providerLL, customerLL, appointment]);
-
-  // ── Status labels ────────────────────────────────────────────────────────
-  const statusLabel: Record<string,string> = {
-    loading:   "Loading map...",
-    locating:  "Getting your current location...",
-    geocoding: "Finding customer address...",
+  const statusLabel: Record<Status, string> = {
+    loading:   "Loading map engine...",
+    locating:  "Getting your GPS location...",
+    geocoding: "Locating customer address...",
+    routing:   "Calculating road route...",
     ready:     "",
     error:     "",
   };
 
-  return (
-    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: "#fff", borderRadius: 20, overflow: "hidden", width: "min(860px, 96vw)", maxHeight: "90vh", display: "flex", flexDirection: "column", boxShadow: "0 32px 80px rgba(0,0,0,0.3)" }}>
+  const routeDist = route ? fmtDist(route.distance) : null;
+  const routeTime = route ? fmtTime(route.duration) : null;
 
-        {/* Header */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 20px", borderBottom: "1px solid #F3F4F6", background: "#fff", flexShrink: 0 }}>
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: "#fff", borderRadius: 20, overflow: "hidden", width: "min(900px, 96vw)", maxHeight: "92vh", display: "flex", flexDirection: "column", boxShadow: "0 32px 80px rgba(0,0,0,0.35)" }}>
+
+        {/* ── Header ── */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 20px", borderBottom: "1px solid #F3F4F6", flexShrink: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <span style={{ fontSize: 22 }}>🗺️</span>
             <div>
               <div style={{ fontWeight: 700, fontSize: 15, color: "#111827" }}>Route to Customer</div>
-              <div style={{ fontSize: 12, color: "#9CA3AF" }}>{appointment.customer_name} · {appointment.location}{appointment.area ? `, ${appointment.area}` : ""}</div>
+              <div style={{ fontSize: 12, color: "#9CA3AF" }}>
+                {appointment.customer_name} · {appointment.location}{appointment.area ? `, ${appointment.area}` : ""}
+              </div>
+              {appointment.customer_phone && (
+                <a href={`tel:${appointment.customer_phone}`}
+                  style={{ fontSize: 13, color: "#F97316", fontWeight: 600, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4, marginTop: 2 }}
+                  onClick={e => e.stopPropagation()}>
+                  📞 {appointment.customer_phone}
+                </a>
+              )}
             </div>
           </div>
-          <button onClick={onClose} style={{ background: "#F3F4F6", border: "none", borderRadius: "50%", width: 32, height: 32, cursor: "pointer", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+          <button onClick={onClose} style={{ background: "#F3F4F6", border: "none", borderRadius: "50%", width: 32, height: 32, cursor: "pointer", fontSize: 16 }}>✕</button>
         </div>
 
-        {/* Stats bar (shown when ready) */}
-        {status === "ready" && distanceKm !== null && (
-          <div style={{ display: "flex", gap: 0, borderBottom: "1px solid #F3F4F6", flexShrink: 0 }}>
+        {/* ── Stats bar ── */}
+        {status === "ready" && (
+          <div style={{ display: "flex", borderBottom: "1px solid #F3F4F6", flexShrink: 0 }}>
             {[
-              { icon: "📍", label: "Distance", value: `${distanceKm} km` },
-              { icon: "🕐", label: "Est. Travel", value: travelMin! < 60 ? `${travelMin} min` : `${Math.floor(travelMin!/60)}h ${travelMin!%60}m` },
-              { icon: "🏠", label: "Customer", value: appointment.customer_name },
-              { icon: "📅", label: "Date", value: new Date(appointment.scheduled_date).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) },
+              { icon: "📏", label: "Road Distance", value: routeDist || "—" },
+              { icon: "🕐", label: "Drive Time",    value: routeTime || "—" },
+              { icon: "📡", label: "Live GPS",       value: liveLL ? "Tracking" : "—" },
+              { icon: "📞", label: "Customer Phone", value: appointment.customer_phone || "—" },
             ].map(({ icon, label, value }) => (
               <div key={label} style={{ flex: 1, padding: "10px 14px", borderRight: "1px solid #F3F4F6", textAlign: "center" }}>
-                <div style={{ fontSize: 16, marginBottom: 2 }}>{icon}</div>
-                <div style={{ fontSize: 11, color: "#9CA3AF", fontWeight: 600, textTransform: "uppercase" as const }}>{label}</div>
+                <div style={{ fontSize: 15, marginBottom: 2 }}>{icon}</div>
+                <div style={{ fontSize: 10, color: "#9CA3AF", fontWeight: 600, textTransform: "uppercase" as const }}>{label}</div>
                 <div style={{ fontSize: 13, fontWeight: 700, color: "#111827", marginTop: 1 }}>{value}</div>
               </div>
             ))}
           </div>
         )}
 
-        {/* Map area */}
-        <div style={{ flex: 1, position: "relative", minHeight: 400 }}>
-          {/* Loading / error overlay */}
-          {status !== "ready" && (
-            <div style={{ position: "absolute", inset: 0, background: "#F9FAFB", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", zIndex: 10, gap: 16 }}>
-              {status === "error" ? (
-                <>
-                  <div style={{ fontSize: 48 }}>📍</div>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: "#374151" }}>Could not load map</div>
-                  <div style={{ fontSize: 13, color: "#9CA3AF", maxWidth: 320, textAlign: "center" }}>{errorMsg}</div>
-                  {errorMsg.includes("ermission") && (
-                    <div style={{ background: "#FFF7ED", border: "1px solid #FED7AA", borderRadius: 10, padding: "10px 16px", fontSize: 12, color: "#92400E", maxWidth: 320, textAlign: "center" }}>
-                      💡 Allow location access in your browser settings and refresh.
-                    </div>
-                  )}
-                  <button onClick={onClose} style={{ background: "#F97316", color: "#fff", border: "none", borderRadius: 10, padding: "10px 20px", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>Close</button>
-                </>
-              ) : (
-                <>
-                  <div style={{ width: 40, height: 40, border: "3px solid #F3F4F6", borderTop: "3px solid #F97316", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
-                  <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-                  <div style={{ fontSize: 14, color: "#6B7280", fontWeight: 500 }}>{statusLabel[status]}</div>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    {(["loading","locating","geocoding"] as const).map(s => (
-                      <div key={s} style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                        <div style={{ width: 8, height: 8, borderRadius: "50%", background: status === s ? "#F97316" : ["loading","locating","geocoding"].indexOf(status) > ["loading","locating","geocoding"].indexOf(s) ? "#22c55e" : "#E5E7EB" }} />
-                        <span style={{ fontSize: 11, color: "#9CA3AF" }}>{s}</span>
+        {/* ── Map + Steps panel ── */}
+        <div style={{ flex: 1, display: "flex", minHeight: 0, position: "relative" }}>
+
+          {/* Map */}
+          <div style={{ flex: 1, position: "relative", minHeight: 380 }}>
+            {status !== "ready" && (
+              <div style={{ position: "absolute", inset: 0, background: "#F9FAFB", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", zIndex: 10, gap: 14 }}>
+                {status === "error" ? (
+                  <>
+                    <div style={{ fontSize: 44 }}>⚠️</div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: "#374151" }}>Could not load map</div>
+                    <div style={{ fontSize: 13, color: "#9CA3AF", maxWidth: 300, textAlign: "center", whiteSpace: "pre-line" }}>{errorMsg}</div>
+                    {errorMsg.includes("ermission") && (
+                      <div style={{ background: "#FFF7ED", border: "1px solid #FED7AA", borderRadius: 10, padding: "10px 16px", fontSize: 12, color: "#92400E", maxWidth: 280, textAlign: "center" }}>
+                        💡 Enable location in your browser settings and try again
                       </div>
-                    ))}
+                    )}
+                    <button onClick={onClose} style={{ background: "#F97316", color: "#fff", border: "none", borderRadius: 10, padding: "10px 20px", fontWeight: 600, cursor: "pointer" }}>Close</button>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ width: 40, height: 40, border: "3px solid #F3F4F6", borderTop: "3px solid #F97316", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+                    <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+                    <div style={{ fontSize: 14, color: "#6B7280", fontWeight: 500 }}>{statusLabel[status]}</div>
+                    <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
+                      {(["loading", "locating", "geocoding", "routing"] as const).map(s => {
+                        const order = ["loading", "locating", "geocoding", "routing"];
+                        const done  = order.indexOf(status) > order.indexOf(s);
+                        const curr  = status === s;
+                        return (
+                          <div key={s} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                            <div style={{ width: 8, height: 8, borderRadius: "50%", background: done ? "#22c55e" : curr ? "#F97316" : "#E5E7EB", transition: "background 0.3s" }} />
+                            <span style={{ fontSize: 10, color: "#9CA3AF" }}>{s}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+            <div ref={mapRef} style={{ width: "100%", height: "100%", minHeight: 380 }} />
+          </div>
+
+          {/* Turn-by-turn steps panel */}
+          {status === "ready" && steps.length > 0 && (
+            <div style={{ width: 240, borderLeft: "1px solid #F3F4F6", display: "flex", flexDirection: "column", flexShrink: 0 }}>
+              <div style={{ padding: "12px 14px", borderBottom: "1px solid #F3F4F6", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontWeight: 600, fontSize: 13, color: "#111827" }}>Directions</span>
+                <button onClick={() => setShowSteps(s => !s)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "#F97316", fontWeight: 600 }}>
+                  {showSteps ? "Hide" : "Show"}
+                </button>
+              </div>
+              {showSteps && (
+                <div style={{ flex: 1, overflowY: "auto", padding: "8px 0" }}>
+                  {steps.map((step, i) => (
+                    <div key={i} style={{ display: "flex", gap: 10, padding: "8px 14px", borderBottom: "1px solid #F9FAFB" }}>
+                      <div style={{ width: 22, height: 22, borderRadius: "50%", background: "#FFF7ED", color: "#F97316", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 1 }}>
+                        {i + 1}
+                      </div>
+                      <span style={{ fontSize: 12, color: "#374151", lineHeight: 1.5 }}>{step}</span>
+                    </div>
+                  ))}
+                  <div style={{ padding: "10px 14px", display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{ width: 22, height: 22, borderRadius: "50%", background: "#EFF6FF", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, flexShrink: 0 }}>🏠</div>
+                    <span style={{ fontSize: 12, color: "#3b82f6", fontWeight: 600 }}>Arrive at destination</span>
                   </div>
-                </>
+                </div>
+              )}
+              {!showSteps && (
+                <div style={{ padding: 14, flex: 1 }}>
+                  <div style={{ fontSize: 12, color: "#9CA3AF", marginBottom: 8 }}>{steps.length} turn-by-turn steps</div>
+                  <button onClick={() => setShowSteps(true)} style={{ width: "100%", background: "#FFF7ED", color: "#F97316", border: "1px solid #FED7AA", borderRadius: 8, padding: "8px 0", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                    Show Directions
+                  </button>
+                </div>
               )}
             </div>
           )}
-          {/* Map container */}
-          <div ref={mapRef} style={{ width: "100%", height: "100%", minHeight: 400 }} />
         </div>
 
-        {/* Footer */}
-        <div style={{ padding: "10px 20px", borderTop: "1px solid #F3F4F6", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
-          <div style={{ display: "flex", gap: 16, fontSize: 12, color: "#9CA3AF" }}>
+        {/* ── Footer ── */}
+        <div style={{ padding: "8px 20px", borderTop: "1px solid #F3F4F6", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
+          <div style={{ display: "flex", gap: 16, fontSize: 11, color: "#9CA3AF" }}>
             <span>🧑‍🔧 Your location</span>
-            <span>🏠 Customer location</span>
-            <span style={{ color: "#F97316" }}>— Route (approx.)</span>
+            <span>🏠 Customer</span>
+            <span style={{ color: "#F97316" }}>━━ Road route (OSRM)</span>
           </div>
-          <div style={{ fontSize: 11, color: "#9CA3AF" }}>Powered by OpenStreetMap · No API key required</div>
+          <div style={{ fontSize: 10, color: "#9CA3AF" }}>© OpenStreetMap · OSRM · No API key</div>
         </div>
+
       </div>
     </div>
   );
 };
 
 // ─── AppointmentsPage.tsx ─────────────────────────────────────────────────────
+// Keeping OLD import paths exactly as they were
+import { api } from "./Dashboardtypes";
+import type { Appointment } from "./Dashboardtypes";
+import { Avatar, StatusBadge, Spinner, Toast, useIsMobile } from "./Dashboardshared";
 
-// ─── Appointment Drawer (GET /appointments/:id) ───────────────────────────────
+// ─── Appointment Drawer ───────────────────────────────────────────────────────
 const AppointmentDrawer = ({ appointmentId, token, onClose }: {
   appointmentId: number; token: string; onClose: () => void;
 }) => {
@@ -299,13 +433,12 @@ const AppointmentDrawer = ({ appointmentId, token, onClose }: {
   }, [appointmentId, token]);
 
   const fmt = (s: string) => new Date(s).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });
-  const SC: Record<string,string> = { pending: "#F97316", accepted: "#3b82f6", ongoing: "#8b5cf6", completed: "#16a34a", rejected: "#ef4444" };
+  const SC: Record<string, string> = { pending: "#F97316", accepted: "#3b82f6", ongoing: "#8b5cf6", completed: "#16a34a", rejected: "#ef4444" };
 
   return (
     <>
       <div onClick={onClose} className="ds-drawer-backdrop" />
       <div className="ds-drawer">
-        {/* Drag handle (visible on mobile) */}
         <div style={{ width: 36, height: 4, background: "#E5E7EB", borderRadius: 2, margin: "12px auto 0" }} />
         <div style={{ padding: "16px 20px", borderBottom: "1px solid #F3F4F6", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <span style={{ fontWeight: 700, fontSize: 16, color: "#111827" }}>Appointment Details</span>
@@ -331,6 +464,12 @@ const AppointmentDrawer = ({ appointmentId, token, onClose }: {
                   <div>
                     <div style={{ fontSize: 14, fontWeight: 700, color: "#111827" }}>{appt.customer_name}</div>
                     <div style={{ fontSize: 12, color: "#9CA3AF" }}>Customer #{appt.customer_id}</div>
+                    {appt.customer_phone && (
+                      <a href={`tel:${appt.customer_phone}`}
+                        style={{ fontSize: 13, color: "#F97316", fontWeight: 600, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4, marginTop: 4 }}>
+                        📞 {appt.customer_phone}
+                      </a>
+                    )}
                   </div>
                 </div>
               </div>
@@ -383,22 +522,22 @@ const AppointmentDrawer = ({ appointmentId, token, onClose }: {
 };
 
 // ─── AppointmentsPage ─────────────────────────────────────────────────────────
-const AppointmentsPage = ({ token, appointments, loading, error, onRefresh, onOpenChat: _onOpenChat }: {
+const AppointmentsPage = ({ token, appointments, loading, error, onRefresh, onOpenChat }: {
   token: string; appointments: Appointment[]; loading: boolean; error: string;
   onRefresh: () => void; onOpenChat?: (appointmentId: number) => void;
 }) => {
   type TabFilter = "All" | "pending" | "accepted" | "ongoing" | "completed" | "rejected";
   const [tab,    setTab]    = useState<TabFilter>("All");
   const [search, setSearch] = useState("");
-  const [saving, setSaving] = useState<Record<number,boolean>>({});
+  const [saving, setSaving] = useState<Record<number, boolean>>({});
   const [toast,  setToast]  = useState<{ msg: string; ok: boolean } | null>(null);
-  const [drawer,   setDrawer]   = useState<number | null>(null);
-  const [mapAppt,  setMapAppt]  = useState<Appointment | null>(null);
+  const [drawer,  setDrawer]  = useState<number | null>(null);
+  const [mapAppt, setMapAppt] = useState<Appointment | null>(null);
   const isMobile = useIsMobile();
 
   const showToast = (msg: string, ok: boolean) => { setToast({ msg, ok }); setTimeout(() => setToast(null), 3000); };
 
-  const tabs: TabFilter[] = ["All","pending","accepted","ongoing","completed","rejected"];
+  const tabs: TabFilter[] = ["All", "pending", "accepted", "ongoing", "completed", "rejected"];
   const counts = Object.fromEntries(tabs.map(t => [t, t === "All" ? appointments.length : appointments.filter(a => a.status === t).length]));
   const filtered = appointments.filter(a => {
     const matchTab    = tab === "All" || a.status === tab;
@@ -425,28 +564,29 @@ const AppointmentsPage = ({ token, appointments, loading, error, onRefresh, onOp
         {busy ? "..." : label}
       </button>
     );
-    if (appt.status === "pending")  return <div style={{ display: "flex", gap: 5 }}>{btn("✓ Accept","#22c55e","accepted")}{btn("✕ Reject","#ef4444","rejected","Unavailable")}</div>;
-    if (appt.status === "accepted") return (
+    if (appt.status === "pending") return (
       <div style={{ display: "flex", gap: 5 }}>
-        {btn("▶ Start","#3b82f6","ongoing")}
-        {/* <button onClick={e => { e.stopPropagation(); onOpenChat?.(appt.id); }}
-          style={{ padding: "6px 11px", background: "#F97316", color: "#fff", fontSize: 12, fontWeight: 700, border: "none", borderRadius: 8, cursor: "pointer" }}
-          title="Open chat with customer">
-          💬
-        </button> */}
-        <button onClick={e => { e.stopPropagation(); setMapAppt(appt); }}
-          style={{ padding: "6px 11px", background: "#3b82f6", color: "#fff", fontSize: 12, fontWeight: 700, border: "none", borderRadius: 8, cursor: "pointer" }}
-          title="View route to customer">
-          🗺️
-        </button>
+        {btn("✓ Accept", "#22c55e", "accepted")}
+        {btn("✕ Reject", "#ef4444", "rejected", "Unavailable")}
       </div>
     );
-    if (appt.status === "ongoing")  return (
+    if (appt.status === "accepted") return (
+      <div style={{ display: "flex", gap: 5 }}>
+        {btn("▶ Start", "#3b82f6", "ongoing")}
+        <button onClick={e => { e.stopPropagation(); onOpenChat?.(appt.id); }}
+          style={{ padding: "6px 11px", background: "#F97316", color: "#fff", fontSize: 12, fontWeight: 700, border: "none", borderRadius: 8, cursor: "pointer" }}
+          title="Open chat with customer">💬</button>
+        <button onClick={e => { e.stopPropagation(); setMapAppt(appt); }}
+          style={{ padding: "6px 11px", background: "#3b82f6", color: "#fff", fontSize: 12, fontWeight: 700, border: "none", borderRadius: 8, cursor: "pointer" }}
+          title="View route to customer">🗺️</button>
+      </div>
+    );
+    if (appt.status === "ongoing") return (
       <div style={{ display: "flex", flexDirection: "column", gap: 5, alignItems: "flex-start" }}>
         <div style={{ display: "flex", gap: 5 }}>
-          {/* <button onClick={e => { e.stopPropagation(); onOpenChat?.(appt.id); }}
+          <button onClick={e => { e.stopPropagation(); onOpenChat?.(appt.id); }}
             style={{ padding: "6px 11px", background: "#F97316", color: "#fff", fontSize: 12, fontWeight: 700, border: "none", borderRadius: 8, cursor: "pointer" }}
-            title="Chat with customer">💬</button> */}
+            title="Chat with customer">💬</button>
           <button onClick={e => { e.stopPropagation(); setMapAppt(appt); }}
             style={{ padding: "6px 11px", background: "#3b82f6", color: "#fff", fontSize: 12, fontWeight: 700, border: "none", borderRadius: 8, cursor: "pointer" }}
             title="Route to customer">🗺️</button>
@@ -456,12 +596,16 @@ const AppointmentsPage = ({ token, appointments, loading, error, onRefresh, onOp
         </span>
       </div>
     );
-    return <span style={{ padding: "6px 11px", background: "#F3F4F6", color: "#9CA3AF", fontSize: 12, fontWeight: 700, borderRadius: 8 }}>{appt.status.charAt(0).toUpperCase() + appt.status.slice(1)}</span>;
+    return (
+      <span style={{ padding: "6px 11px", background: "#F3F4F6", color: "#9CA3AF", fontSize: 12, fontWeight: 700, borderRadius: 8 }}>
+        {appt.status.charAt(0).toUpperCase() + appt.status.slice(1)}
+      </span>
+    );
   };
 
   return (
     <div className="ds-page">
-      {toast && <Toast msg={toast.msg} ok={toast.ok} />}
+      {toast   && <Toast msg={toast.msg} ok={toast.ok} />}
       {drawer  !== null && <AppointmentDrawer appointmentId={drawer} token={token} onClose={() => setDrawer(null)} />}
       {mapAppt !== null && <MapModal appointment={mapAppt} onClose={() => setMapAppt(null)} />}
 
@@ -501,13 +645,13 @@ const AppointmentsPage = ({ token, appointments, loading, error, onRefresh, onOp
         {!isMobile && <input type="date" />}
       </div>
 
-      {/* Table → cards on mobile */}
+      {/* Table */}
       {loading ? <Spinner /> : (
         <div className="ds-table-wrap">
           <table className="ds-table">
             <thead>
               <tr>
-                {["Customer","Service","Date & Time","Location","Price","Status","Actions"].map(h => (
+                {["Customer", "Service", "Date & Time", "Location", "Price", "Status", "Actions"].map(h => (
                   <th key={h}>{h}</th>
                 ))}
               </tr>
