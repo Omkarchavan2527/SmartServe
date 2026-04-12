@@ -50,6 +50,7 @@ export interface Appointment {
   agreed_price:    number;
   status:          string;
   customer_name:   string;
+  customer_phone:  string | null;
   rejection_note:  string | null;
   completion_note: string | null;
   created_at:      string;
