@@ -1,151 +1,344 @@
-// ─── ProfilePage.tsx ──────────────────────────────────────────────────────────
+// ─── ReviewsPage.tsx ──────────────────────────────────────────────────────────
 import React, { useState, useEffect } from "react";
-import { api, type ProviderProfile } from "./Dashboardtypes";
-import { Avatar, Toggle, Spinner, Toast, useIsMobile } from "./Dashboardshared";
+import { api, type ProviderProfile, type Review } from "./dashboardTypes";
+import { Spinner, useIsMobile } from "./dashboardShared";
 
-const ProfilePage = ({ token, profile, onProfileUpdate }: {
-  token: string; profile: ProviderProfile | null; onProfileUpdate: (p: ProviderProfile) => void;
-}) => {
-  const [form,   setForm]   = useState<Partial<ProviderProfile>>({});
-  const [saving, setSaving] = useState(false);
-  const [toast,  setToast]  = useState<{ msg: string; ok: boolean } | null>(null);
-  const isMobile = useIsMobile();
+// ── Star renderer ─────────────────────────────────────────────────────────────
+const Stars = ({ rating, size = 14 }: { rating: number; size?: number }) => (
+  <div style={{ display: "flex", gap: 2 }}>
+    {[1, 2, 3, 4, 5].map(i => (
+      <svg key={i} width={size} height={size} viewBox="0 0 24 24"
+        fill={i <= Math.round(rating) ? "#F97316" : "#E5E7EB"}>
+        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+      </svg>
+    ))}
+  </div>
+);
 
-  useEffect(() => { if (profile) setForm(profile); }, [profile]);
-  const showToast = (msg: string, ok: boolean) => { setToast({ msg, ok }); setTimeout(() => setToast(null), 3000); };
-
-  const save = async () => {
-    setSaving(true);
-    try {
-      const updated = await api<ProviderProfile>("/providers/me/profile", token, {
-        method: "PUT",
-        body: JSON.stringify({ bio: form.bio, serviceAreas: form.service_areas, skills: form.skills, basePricePerHour: form.base_price_per_hour, workStartTime: form.work_start_time, workEndTime: form.work_end_time }),
-      });
-      onProfileUpdate(updated);
-      showToast("Profile saved successfully!", true);
-    } catch (e) { showToast((e as Error).message, false); }
-    finally { setSaving(false); }
-  };
-
-  const skills = (form.skills || "").split(",").map(s => s.trim()).filter(Boolean);
-  const areas  = (form.service_areas || "").split(",").map(s => s.trim()).filter(Boolean);
-  const days   = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
-  const C: React.CSSProperties = { background: "#fff", borderRadius: 16, border: "1px solid #F3F4F6", boxShadow: "0 1px 4px rgba(0,0,0,0.05)", padding: isMobile ? 16 : 20 };
-  const chip: React.CSSProperties = { padding: "5px 12px", background: "#FFF7ED", color: "#F97316", fontSize: 12, fontWeight: 500, borderRadius: 8, border: "1px solid #FFEDD5" };
-  const inp: React.CSSProperties = { width: "100%", border: "1px solid #E5E7EB", borderRadius: 12, padding: "10px 14px", fontSize: 13, color: "#374151", outline: "none", boxSizing: "border-box" };
-
-  const Field = ({ label, value, onChange, textarea, readOnly }: { label: string; value: string; onChange?: (v: string) => void; textarea?: boolean; readOnly?: boolean }) => (
-    <div style={{ marginBottom: 14 }}>
-      <label style={{ display: "block", fontSize: 12, color: "#9CA3AF", fontWeight: 500, marginBottom: 6 }}>{label}</label>
-      {textarea
-        ? <textarea value={value} onChange={e => onChange?.(e.target.value)} rows={3} readOnly={readOnly} style={{ ...inp, resize: "none", background: readOnly ? "#F9FAFB" : "#fff" }} />
-        : <input value={value} onChange={e => onChange?.(e.target.value)} readOnly={readOnly} style={{ ...inp, background: readOnly ? "#F9FAFB" : "#fff" }} />}
-    </div>
-  );
-
-  if (!profile) return <Spinner />;
-
+// ── Rating bar ────────────────────────────────────────────────────────────────
+const RatingBar = ({ star, count, total }: { star: number; count: number; total: number }) => {
+  const pct = total > 0 ? (count / total) * 100 : 0;
   return (
-    <div className="ds-page" style={{ maxWidth: 1000 }}>
-      {toast && <Toast msg={toast.msg} ok={toast.ok} />}
-
-      {/* Header card */}
-      <div style={{ ...C, display: "flex", alignItems: isMobile ? "flex-start" : "center", gap: isMobile ? 14 : 20, marginBottom: 16, flexDirection: isMobile ? "column" : "row" }}>
-        <div style={{ position: "relative" }}>
-          <Avatar name={profile.full_name} color="#9CA3AF" size={isMobile ? 60 : 72} />
-          <div style={{ position: "absolute", bottom: -2, right: -2, width: 22, height: 22, background: "#F97316", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10 }}>📷</div>
-        </div>
-        <div style={{ flex: 1 }}>
-          <h2 style={{ fontSize: isMobile ? 18 : 20, fontWeight: 700, color: "#111827", margin: 0 }}>
-            {profile.full_name}{" "}
-            {profile.verification_status === "verified" && <span style={{ color: "#22c55e", fontSize: 13 }}>✓ Verified</span>}
-          </h2>
-          <div style={{ color: "#F97316", fontWeight: 500, fontSize: 14, marginTop: 2 }}>{profile.service_category}</div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: isMobile ? 8 : 16, marginTop: 4, fontSize: 13, color: "#6B7280" }}>
-            <span>📍 {profile.city}</span>
-            <span>💼 {profile.experience_years} Yrs</span>
-            <span>⭐ {profile.avg_rating} ({profile.total_reviews})</span>
-          </div>
-        </div>
+    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+      <span style={{ fontSize: 12, color: "#6B7280", width: 14, textAlign: "right" as const }}>{star}</span>
+      <svg width={12} height={12} viewBox="0 0 24 24" fill="#F97316">
+        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+      </svg>
+      <div style={{ flex: 1, height: 8, background: "#F3F4F6", borderRadius: 4, overflow: "hidden" }}>
+        <div style={{
+          width: `${pct}%`, height: "100%",
+          background: "linear-gradient(90deg, #F97316, #fb923c)",
+          borderRadius: 4, transition: "width 0.6s ease",
+        }} />
       </div>
-
-      {/* Personal + Skills */}
-      <div className="ds-grid-2" style={{ marginBottom: 16 }}>
-        <div style={C}>
-          <div style={{ fontWeight: 600, color: "#111827", marginBottom: 14 }}>👤 Personal Info</div>
-          <Field label="Full Name"     value={profile.full_name} readOnly />
-          <Field label="Email"         value={profile.email}     readOnly />
-          <Field label="Phone"         value={profile.phone}     readOnly />
-          <Field label="City"          value={profile.city}      readOnly />
-          <Field label="Bio"           value={form.bio || ""}    onChange={v => setForm(f => ({ ...f, bio: v }))} textarea />
-        </div>
-
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <div style={C}>
-            <div style={{ fontWeight: 600, color: "#111827", marginBottom: 12 }}>🔧 Skills</div>
-            <div style={{ fontSize: 11, color: "#9CA3AF", marginBottom: 6 }}>SKILLS (comma-separated)</div>
-            <input value={form.skills || ""} onChange={e => setForm(f => ({ ...f, skills: e.target.value }))}
-              placeholder="e.g. Wiring, Lighting" style={{ ...inp, marginBottom: 10 }} />
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              {skills.map(s => <span key={s} style={chip}>{s}</span>)}
-            </div>
-          </div>
-          <div style={C}>
-            <div style={{ fontWeight: 600, color: "#111827", marginBottom: 12 }}>📍 Service Areas</div>
-            <input value={form.service_areas || ""} onChange={e => setForm(f => ({ ...f, service_areas: e.target.value }))}
-              placeholder="e.g. Andheri, Bandra" style={{ ...inp, marginBottom: 10 }} />
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              {areas.map(a => <span key={a} style={chip}>{a}</span>)}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Hours + Pricing */}
-      <div className="ds-grid-2" style={{ marginBottom: 20 }}>
-        <div style={C}>
-          <div style={{ fontWeight: 600, color: "#111827", marginBottom: 12 }}>⏰ Working Hours</div>
-          {days.map((day, i) => {
-            const active = i < 5;
-            return (
-              <div key={day} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 0", borderBottom: i < days.length - 1 ? "1px solid #F9FAFB" : "none" }}>
-                <Toggle active={active} onChange={() => {}} />
-                <span style={{ fontSize: 13, color: "#374151", width: isMobile ? 70 : 90 }}>{isMobile ? day.slice(0,3) : day}</span>
-                {active
-                  ? <div style={{ display: "flex", gap: 6, fontSize: 12, color: "#6B7280", alignItems: "center" }}>
-                      <span style={{ border: "1px solid #E5E7EB", borderRadius: 8, padding: "3px 8px" }}>{form.work_start_time || "09:00"}</span>
-                      <span>–</span>
-                      <span style={{ border: "1px solid #E5E7EB", borderRadius: 8, padding: "3px 8px" }}>{form.work_end_time || "18:00"}</span>
-                    </div>
-                  : <span style={{ fontSize: 13, color: "#9CA3AF" }}>Closed</span>
-                }
-              </div>
-            );
-          })}
-        </div>
-        <div style={C}>
-          <div style={{ fontWeight: 600, color: "#111827", marginBottom: 14 }}>₹ Pricing</div>
-          <label style={{ fontSize: 12, color: "#9CA3AF", display: "block", marginBottom: 6 }}>Base Price/hr (₹)</label>
-          <input type="number" value={form.base_price_per_hour || 0}
-            onChange={e => setForm(f => ({ ...f, base_price_per_hour: Number(e.target.value) }))}
-            style={{ ...inp, marginBottom: 14 }} />
-          <input type="range" min={300} max={2000} value={form.base_price_per_hour || 800}
-            onChange={e => setForm(f => ({ ...f, base_price_per_hour: Number(e.target.value) }))}
-            style={{ width: "100%", accentColor: "#F97316", marginBottom: 6 }} />
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#9CA3AF" }}>
-            <span>₹300</span>
-            <span style={{ color: "#F97316", fontWeight: 600 }}>₹{form.base_price_per_hour || 800}/hr</span>
-            <span>₹2000</span>
-          </div>
-        </div>
-      </div>
-
-      <button onClick={save} disabled={saving}
-        style={{ width: "100%", background: saving ? "#9CA3AF" : "#F97316", color: "#fff", fontWeight: 700, fontSize: 15, padding: "15px 0", borderRadius: 16, border: "none", cursor: saving ? "not-allowed" : "pointer" }}>
-        {saving ? "⏳ Saving..." : "💾 Save Changes"}
-      </button>
+      <span style={{ fontSize: 12, color: "#9CA3AF", width: 24, textAlign: "right" as const }}>{count}</span>
     </div>
   );
 };
 
-export default ProfilePage;
+// ── Avatar ────────────────────────────────────────────────────────────────────
+const ReviewAvatar = ({ name }: { name: string }) => {
+  const initials = name.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase();
+  const colors   = ["#F97316", "#3B82F6", "#8B5CF6", "#10B981", "#EC4899", "#F59E0B"];
+  const color    = colors[name.charCodeAt(0) % colors.length];
+  return (
+    <div style={{
+      width: 40, height: 40, borderRadius: "50%",
+      background: color, color: "#fff",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      fontSize: 14, fontWeight: 700, flexShrink: 0,
+    }}>{initials}</div>
+  );
+};
+
+const fmtDate = (iso: string) =>
+  new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ReviewsPage — shows reviews ABOUT the provider (from customers)
+// API: GET /api/v1/reviews/provider-dashboard (auth required)
+// ─────────────────────────────────────────────────────────────────────────────
+const ReviewsPage = ({
+  token,
+  profile,
+}: {
+  token:   string;
+  profile: ProviderProfile | null;
+}) => {
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error,   setError]   = useState<string | null>(null);
+  const [filter,  setFilter]  = useState<number | null>(null);
+  const [sort,    setSort]    = useState<"newest" | "oldest" | "highest" | "lowest">("newest");
+  const isMobile = useIsMobile();
+
+  // ── Fetch — uses provider-dashboard endpoint ──────────────────────────────
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        // GET /api/v1/reviews/provider-dashboard — returns reviews about this provider
+        const data = await api<Review[]>("/reviews/provider-dashboard", token);
+        setReviews(Array.isArray(data) ? data : []);
+      } catch (e) {
+        setError((e as Error).message);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [token]);
+
+  // ── Stats ─────────────────────────────────────────────────────────────────
+  const total     = reviews.length;
+  const avgRating = total > 0 ? reviews.reduce((s, r) => s + r.rating, 0) / total : 0;
+  const starCounts = [5, 4, 3, 2, 1].map(star => ({
+    star,
+    count: reviews.filter(r => Math.round(r.rating) === star).length,
+  }));
+
+  // ── Filter + sort ─────────────────────────────────────────────────────────
+  const filtered = reviews
+    .filter(r => filter === null || Math.round(r.rating) === filter)
+    .sort((a, b) => {
+      if (sort === "newest")  return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      if (sort === "oldest")  return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      if (sort === "highest") return b.rating - a.rating;
+      return a.rating - b.rating;
+    });
+
+  const C: React.CSSProperties = {
+    background: "#fff", borderRadius: 14, border: "1px solid #F3F4F6",
+    boxShadow: "0 1px 4px rgba(0,0,0,0.05)", padding: isMobile ? 16 : 20,
+  };
+
+  if (loading) return (
+    <div className="ds-page" style={{ maxWidth: 860 }}>
+      <div className="ds-page-header">
+        <div><h1>⭐ My Reviews</h1><p>Loading your customer reviews...</p></div>
+      </div>
+      <Spinner />
+    </div>
+  );
+
+  if (error) return (
+    <div className="ds-page" style={{ maxWidth: 860 }}>
+      <div style={{ ...C, textAlign: "center", padding: 40, color: "#EF4444", fontSize: 14 }}>
+        ⚠️ Failed to load reviews: {error}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="ds-page" style={{ maxWidth: 860 }}>
+
+      {/* Header */}
+      <div className="ds-page-header" style={{ marginBottom: 20 }}>
+        <div>
+          <h1 style={{ fontSize: isMobile ? 20 : 24, fontWeight: 700, color: "#111827" }}>
+            ⭐ My Reviews
+          </h1>
+          <p style={{ fontSize: 13, color: "#9CA3AF", marginTop: 2 }}>
+            {total > 0
+              ? `${total} review${total !== 1 ? "s" : ""} from your customers`
+              : "Reviews from your customers will appear here"}
+          </p>
+        </div>
+      </div>
+
+      {/* Summary card */}
+      <div style={{
+        ...C,
+        display: "flex",
+        flexDirection: isMobile ? "column" : "row",
+        gap: 24, marginBottom: 16,
+        alignItems: isMobile ? "stretch" : "center",
+      }}>
+        {/* Big avg rating */}
+        <div style={{ textAlign: "center", minWidth: 120 }}>
+          <div style={{ fontSize: 56, fontWeight: 800, color: "#111827", lineHeight: 1, fontFamily: "monospace" }}>
+            {total > 0 ? avgRating.toFixed(1) : "—"}
+          </div>
+          <div style={{ marginTop: 6 }}>
+            <Stars rating={avgRating} size={18} />
+          </div>
+          <div style={{ fontSize: 12, color: "#9CA3AF", marginTop: 4 }}>
+            {total} review{total !== 1 ? "s" : ""}
+          </div>
+        </div>
+
+        {!isMobile && <div style={{ width: 1, background: "#F3F4F6", alignSelf: "stretch" }} />}
+
+        {/* Rating bars */}
+        <div style={{ flex: 1 }}>
+          {starCounts.map(({ star, count }) => (
+            <RatingBar key={star} star={star} count={count} total={total} />
+          ))}
+        </div>
+
+        {!isMobile && <div style={{ width: 1, background: "#F3F4F6", alignSelf: "stretch" }} />}
+
+        {/* Quick stats */}
+        <div style={{
+          display: "flex",
+          flexDirection: isMobile ? "row" : "column",
+          gap: 12, justifyContent: "center",
+        }}>
+          {[
+            { label: "5★ Reviews",  value: starCounts[0].count,                                  color: "#22c55e" },
+            { label: "Avg Rating",  value: (profile?.avg_rating ?? avgRating).toFixed(1),        color: "#F97316" },
+            { label: "Total Jobs",  value: profile?.total_jobs ?? total,                         color: "#3B82F6" },
+            { label: "Response",    value: total > 0 ? `${Math.round((starCounts[0].count + starCounts[1].count) / total * 100)}%` : "—", color: "#8B5CF6" },
+          ].map(({ label, value, color }) => (
+            <div key={label} style={{
+              textAlign: "center", padding: "10px 16px",
+              background: "#F9FAFB", borderRadius: 10,
+              border: "1px solid #F3F4F6",
+            }}>
+              <div style={{ fontSize: 22, fontWeight: 700, color }}>{value}</div>
+              <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 2 }}>{label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Filter + Sort bar */}
+      <div style={{ display: "flex", flexWrap: "wrap" as const, gap: 8, marginBottom: 16, alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" as const, flex: 1 }}>
+          {[null, 5, 4, 3, 2, 1].map(star => (
+            <button key={star ?? "all"} onClick={() => setFilter(star)} style={{
+              padding: "6px 14px", borderRadius: 20, fontSize: 12, fontWeight: 600,
+              border: "1.5px solid",
+              borderColor: filter === star ? "#F97316" : "#E5E7EB",
+              background:  filter === star ? "#FFF7ED" : "#fff",
+              color:       filter === star ? "#F97316" : "#6B7280",
+              cursor: "pointer", transition: "all 0.15s",
+            }}>
+              {star === null ? "All" : `${star}★`}
+              {star !== null && (
+                <span style={{ marginLeft: 4, color: "#9CA3AF" }}>
+                  ({starCounts.find(s => s.star === star)?.count ?? 0})
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+        <select value={sort} onChange={e => setSort(e.target.value as typeof sort)} style={{
+          border: "1.5px solid #E5E7EB", borderRadius: 10,
+          padding: "6px 12px", fontSize: 12, color: "#374151",
+          background: "#fff", outline: "none", cursor: "pointer",
+        }}>
+          <option value="newest">Newest first</option>
+          <option value="oldest">Oldest first</option>
+          <option value="highest">Highest rated</option>
+          <option value="lowest">Lowest rated</option>
+        </select>
+      </div>
+
+      {/* Reviews list */}
+      {filtered.length === 0 ? (
+        <div style={{ ...C, textAlign: "center", padding: 48, color: "#9CA3AF", fontSize: 14 }}>
+          {total === 0
+            ? (
+              <div>
+                <div style={{ fontSize: 48, marginBottom: 12 }}>⭐</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: "#374151", marginBottom: 6 }}>No reviews yet</div>
+                <p style={{ fontSize: 13, maxWidth: 280, margin: "0 auto" }}>
+                  Complete jobs and ask customers to leave a review — they'll appear here!
+                </p>
+              </div>
+            )
+            : "No reviews match this filter."
+          }
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {filtered.map((review, idx) => (
+            <div key={review.id} style={{
+              ...C,
+              animation: "fadeUp 0.3s ease both",
+              animationDelay: `${idx * 0.04}s`,
+            }}>
+              <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+                <ReviewAvatar name={review.reviewer_name} />
+
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  {/* Top row */}
+                  <div style={{
+                    display: "flex", justifyContent: "space-between",
+                    alignItems: "flex-start", flexWrap: "wrap" as const,
+                    gap: 6, marginBottom: 6,
+                  }}>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 14, color: "#111827" }}>
+                        {review.reviewer_name}
+                      </div>
+                      {/* Service name + date */}
+                      <div style={{ fontSize: 12, color: "#9CA3AF", marginTop: 2, display: "flex", alignItems: "center", gap: 6 }}>
+                        {review.service_name && (
+                          <>
+                            <span style={{
+                              background: "#FFF7ED", color: "#F97316",
+                              border: "1px solid #FED7AA",
+                              borderRadius: 6, padding: "1px 7px",
+                              fontSize: 11, fontWeight: 600,
+                            }}>
+                              {review.service_name}
+                            </span>
+                            <span>·</span>
+                          </>
+                        )}
+                        <span>{fmtDate(review.created_at)}</span>
+                      </div>
+                    </div>
+
+                    {/* Rating badge */}
+                    <div style={{
+                      display: "flex", alignItems: "center", gap: 6,
+                      background: review.rating >= 4 ? "#F0FDF4" : review.rating >= 3 ? "#FFFBEB" : "#FEF2F2",
+                      border: `1px solid ${review.rating >= 4 ? "#BBF7D0" : review.rating >= 3 ? "#FDE68A" : "#FECACA"}`,
+                      borderRadius: 8, padding: "4px 10px",
+                    }}>
+                      <Stars rating={review.rating} size={12} />
+                      <span style={{
+                        fontSize: 13, fontWeight: 700, fontFamily: "monospace",
+                        color: review.rating >= 4 ? "#16A34A" : review.rating >= 3 ? "#D97706" : "#DC2626",
+                      }}>
+                        {review.rating.toFixed(1)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Comment */}
+                  {review.comment ? (
+                    <p style={{
+                      fontSize: 13, color: "#4B5563", lineHeight: 1.6,
+                      margin: 0, padding: "10px 14px",
+                      background: "#F9FAFB", borderRadius: 10,
+                      borderLeft: "3px solid #F97316",
+                    }}>
+                      "{review.comment}"
+                    </p>
+                  ) : (
+                    <p style={{ fontSize: 13, color: "#D1D5DB", fontStyle: "italic", margin: 0 }}>
+                      No written comment
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <style>{`
+        @keyframes fadeUp {
+          from { opacity: 0; transform: translateY(10px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
+    </div>
+  );
+};
+
+export default ReviewsPage;
