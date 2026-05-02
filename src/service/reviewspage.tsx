@@ -1,8 +1,18 @@
 // ─── ReviewsPage.tsx ──────────────────────────────────────────────────────────
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Dispatch, SetStateAction } from "react";
+import { api, type ProviderProfile } from "./dashboardTypes";
+import { Spinner, useIsMobile } from "./dashboardShared";
 
-import { api, type ProviderProfile } from "./Dashboardtypes";
-import { Avatar, Spinner, Toast, useIsMobile } from "./Dashboardshared";
+// ── Inline Review type (avoids dependency on dashboardTypes export) ────────────
+interface Review {
+  id:            string | number;
+  rating:        number;
+  comment:       string | null;
+  reviewer_name: string;
+  service_name?: string | null;
+  created_at:    string;
+}
+
 // ── Star renderer ─────────────────────────────────────────────────────────────
 const Stars = ({ rating, size = 14 }: { rating: number; size?: number }) => (
   <div style={{ display: "flex", gap: 2 }}>
@@ -55,15 +65,14 @@ const fmtDate = (iso: string) =>
   new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ReviewsPage — shows reviews ABOUT the provider (from customers)
-// API: GET /api/v1/reviews/provider-dashboard (auth required)
-// ─────────────────────────────────────────────────────────────────────────────
 const ReviewsPage = ({
   token,
   profile,
+  onProfileUpdate,
 }: {
-  token:   string;
-  profile: ProviderProfile | null;
+  token:            string;
+  profile:          ProviderProfile | null;
+  onProfileUpdate?: Dispatch<SetStateAction<ProviderProfile | null>>;
 }) => {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
@@ -72,13 +81,11 @@ const ReviewsPage = ({
   const [sort,    setSort]    = useState<"newest" | "oldest" | "highest" | "lowest">("newest");
   const isMobile = useIsMobile();
 
-  // ── Fetch — uses provider-dashboard endpoint ──────────────────────────────
   useEffect(() => {
     (async () => {
       setLoading(true);
       setError(null);
       try {
-        // GET /api/v1/reviews/provider-dashboard — returns reviews about this provider
         const data = await api<Review[]>("/reviews/provider-dashboard", token);
         setReviews(Array.isArray(data) ? data : []);
       } catch (e) {
@@ -89,7 +96,6 @@ const ReviewsPage = ({
     })();
   }, [token]);
 
-  // ── Stats ─────────────────────────────────────────────────────────────────
   const total     = reviews.length;
   const avgRating = total > 0 ? reviews.reduce((s, r) => s + r.rating, 0) / total : 0;
   const starCounts = [5, 4, 3, 2, 1].map(star => ({
@@ -97,7 +103,6 @@ const ReviewsPage = ({
     count: reviews.filter(r => Math.round(r.rating) === star).length,
   }));
 
-  // ── Filter + sort ─────────────────────────────────────────────────────────
   const filtered = reviews
     .filter(r => filter === null || Math.round(r.rating) === filter)
     .sort((a, b) => {
@@ -154,7 +159,6 @@ const ReviewsPage = ({
         gap: 24, marginBottom: 16,
         alignItems: isMobile ? "stretch" : "center",
       }}>
-        {/* Big avg rating */}
         <div style={{ textAlign: "center", minWidth: 120 }}>
           <div style={{ fontSize: 56, fontWeight: 800, color: "#111827", lineHeight: 1, fontFamily: "monospace" }}>
             {total > 0 ? avgRating.toFixed(1) : "—"}
@@ -169,7 +173,6 @@ const ReviewsPage = ({
 
         {!isMobile && <div style={{ width: 1, background: "#F3F4F6", alignSelf: "stretch" }} />}
 
-        {/* Rating bars */}
         <div style={{ flex: 1 }}>
           {starCounts.map(({ star, count }) => (
             <RatingBar key={star} star={star} count={count} total={total} />
@@ -178,17 +181,16 @@ const ReviewsPage = ({
 
         {!isMobile && <div style={{ width: 1, background: "#F3F4F6", alignSelf: "stretch" }} />}
 
-        {/* Quick stats */}
         <div style={{
           display: "flex",
           flexDirection: isMobile ? "row" : "column",
           gap: 12, justifyContent: "center",
         }}>
           {[
-            { label: "5★ Reviews",  value: starCounts[0].count,                                  color: "#22c55e" },
-            { label: "Avg Rating",  value: (profile?.avg_rating ?? avgRating).toFixed(1),        color: "#F97316" },
-            { label: "Total Jobs",  value: profile?.total_jobs ?? total,                         color: "#3B82F6" },
-            { label: "Response",    value: total > 0 ? `${Math.round((starCounts[0].count + starCounts[1].count) / total * 100)}%` : "—", color: "#8B5CF6" },
+            { label: "5★ Reviews", value: starCounts[0].count,                                                color: "#22c55e" },
+            { label: "Avg Rating", value: (profile?.avg_rating ?? avgRating).toFixed(1),                     color: "#F97316" },
+            { label: "Total Jobs", value: profile?.total_jobs ?? total,                                       color: "#3B82F6" },
+            { label: "Response",   value: total > 0 ? `${Math.round((starCounts[0].count + starCounts[1].count) / total * 100)}%` : "—", color: "#8B5CF6" },
           ].map(({ label, value, color }) => (
             <div key={label} style={{
               textAlign: "center", padding: "10px 16px",
@@ -238,18 +240,15 @@ const ReviewsPage = ({
       {/* Reviews list */}
       {filtered.length === 0 ? (
         <div style={{ ...C, textAlign: "center", padding: 48, color: "#9CA3AF", fontSize: 14 }}>
-          {total === 0
-            ? (
-              <div>
-                <div style={{ fontSize: 48, marginBottom: 12 }}>⭐</div>
-                <div style={{ fontSize: 16, fontWeight: 700, color: "#374151", marginBottom: 6 }}>No reviews yet</div>
-                <p style={{ fontSize: 13, maxWidth: 280, margin: "0 auto" }}>
-                  Complete jobs and ask customers to leave a review — they'll appear here!
-                </p>
-              </div>
-            )
-            : "No reviews match this filter."
-          }
+          {total === 0 ? (
+            <div>
+              <div style={{ fontSize: 48, marginBottom: 12 }}>⭐</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: "#374151", marginBottom: 6 }}>No reviews yet</div>
+              <p style={{ fontSize: 13, maxWidth: 280, margin: "0 auto" }}>
+                Complete jobs and ask customers to leave a review — they'll appear here!
+              </p>
+            </div>
+          ) : "No reviews match this filter."}
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -261,9 +260,7 @@ const ReviewsPage = ({
             }}>
               <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
                 <ReviewAvatar name={review.reviewer_name} />
-
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  {/* Top row */}
                   <div style={{
                     display: "flex", justifyContent: "space-between",
                     alignItems: "flex-start", flexWrap: "wrap" as const,
@@ -273,7 +270,6 @@ const ReviewsPage = ({
                       <div style={{ fontWeight: 600, fontSize: 14, color: "#111827" }}>
                         {review.reviewer_name}
                       </div>
-                      {/* Service name + date */}
                       <div style={{ fontSize: 12, color: "#9CA3AF", marginTop: 2, display: "flex", alignItems: "center", gap: 6 }}>
                         {review.service_name && (
                           <>
@@ -292,7 +288,6 @@ const ReviewsPage = ({
                       </div>
                     </div>
 
-                    {/* Rating badge */}
                     <div style={{
                       display: "flex", alignItems: "center", gap: 6,
                       background: review.rating >= 4 ? "#F0FDF4" : review.rating >= 3 ? "#FFFBEB" : "#FEF2F2",
@@ -309,7 +304,6 @@ const ReviewsPage = ({
                     </div>
                   </div>
 
-                  {/* Comment */}
                   {review.comment ? (
                     <p style={{
                       fontSize: 13, color: "#4B5563", lineHeight: 1.6,
