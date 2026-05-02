@@ -1,8 +1,8 @@
 // ─── ReviewsPage.tsx ──────────────────────────────────────────────────────────
 import React, { useState, useEffect } from "react";
-import { api, type ProviderProfile, type Review } from "./dashboardTypes";
-import { Spinner, useIsMobile } from "./dashboardShared";
 
+import { api, type ProviderProfile } from "./Dashboardtypes";
+import { Avatar, Spinner, Toast, useIsMobile } from "./Dashboardshared";
 // ── Star renderer ─────────────────────────────────────────────────────────────
 const Stars = ({ rating, size = 14 }: { rating: number; size?: number }) => (
   <div style={{ display: "flex", gap: 2 }}>
