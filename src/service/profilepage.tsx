@@ -1,5 +1,5 @@
 // ─── ProfilePage.tsx ──────────────────────────────────────────────────────────
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect} from "react";
 import { api, type ProviderProfile } from "./Dashboardtypes";
 import { Avatar, Spinner, Toast, useIsMobile } from "./Dashboardshared";
 
