@@ -85,8 +85,7 @@ export function SmartServeDashboard({
           {page === "appointments" && <AppointmentsPage token={accessToken} appointments={appointments} loading={apptLoading} error={apptError} onRefresh={fetchAppointments} />}
           {page === "profile"      && <ProfilePage      token={accessToken} profile={profile} onProfileUpdate={setProfile} />}
           {page === "reviews"      && <ReviewsPage      token={accessToken} profile={profile} onProfileUpdate={setProfile} />}
-          /* {page === "earnings"     && <EarningsPage     appointments={appointments} />} */
-          {page === "earnings" && <EarningsPage appointments={appointments} token={accessToken} />}
+          {page === "earnings" && <EarningsPage           token={accessToken} appointments={appointments}  />}
 
           {page === "settings"     && <SettingsPage     token={accessToken} profile={profile} />}
         </main>
