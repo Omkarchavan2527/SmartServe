@@ -14,7 +14,7 @@ const Hero: React.FC = () => {
       tl.from(titleRef.current, {
         y: 100,
         opacity: 0,
-        duration: 1.2,
+        duration: 1.25,
         delay: 0.3
       }) // Target the class for both subtitle elements
         .from('.hero-subtitle-text', {
